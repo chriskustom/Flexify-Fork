@@ -44,12 +44,11 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
       itemBuilder: (context, index) {
         final currentItem = sortedDays[index];
         final previousItem = index > 0 ? sortedDays[index - 1] : currentItem;
-
         final bool showDivider = index == 0 || !isSameDay(currentItem.day, previousItem.day);
+
         return Column(
           children: historyChildren(
             showDivider,
-            currentItem.day,
             currentItem,
             context,
             showImages,
@@ -67,7 +66,6 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
 
   List<Widget> historyChildren(
       bool showDivider,
-      DateTime dividerDate,
       HistoryDay history,
       BuildContext context,
       bool showImages,
@@ -82,7 +80,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
             Selector<SettingsState, String>(
               selector: (context, settings) => settings.value.shortDateFormat,
               builder: (context, value, child) => Text(
-                DateFormat(value).format(dividerDate),
+                DateFormat(value).format(history.day),
               ),
             ),
             const SizedBox(width: 4),
