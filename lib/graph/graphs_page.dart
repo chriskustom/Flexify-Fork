@@ -44,6 +44,7 @@ class GraphsPageState extends State<GraphsPage>
   final scroll = ScrollController();
   bool extendFab = true;
   int total = 0;
+  GraphSort sort = GraphSort.dateDesc;
 
   @override
   bool get wantKeepAlive => true;
@@ -165,7 +166,27 @@ class GraphsPageState extends State<GraphsPage>
           }
 
           final gymSets = stream.toList();
+          switch (sort) {
+            case GraphSort.dateDesc:
+              gymSets.sort(
+                    (a, b) => b.created.value.compareTo(a.created.value),
+              );
+              break;
 
+            case GraphSort.dateAsc:
+              gymSets.sort(
+                    (a, b) => a.created.value.compareTo(b.created.value),
+              );
+              break;
+
+            case GraphSort.name:
+              gymSets.sort(
+                    (a, b) => a.name.value.toLowerCase().compareTo(
+                  b.name.value.toLowerCase(),
+                ),
+              );
+              break;
+          }
           return material.Column(
             children: [
               AppSearch(
@@ -174,6 +195,12 @@ class GraphsPageState extends State<GraphsPage>
                   setCategory: (value) {
                     setState(() {
                       category = value;
+                    });
+                  },
+                  sort: sort,
+                  setSort: (value) {
+                    setState(() {
+                      sort = value;
                     });
                   },
                 ),
@@ -381,16 +408,15 @@ class GraphsPageState extends State<GraphsPage>
         final set = gymSets.elementAtOrNull(currentIdx);
         if (set == null) return const SizedBox();
 
-        final prev = currentIdx > 0 ? gymSets[currentIdx - 1] : null;
+        final previousItem = currentIdx > 0 ? gymSets[currentIdx - 1] : set;
 
-        final created = prev?.created.value.toLocal();
-
-        final divider =
-            created != null && !isSameDay(created, set.created.value);
+        final bool showDivider =
+            sort != GraphSort.name
+                && (currentIdx == 0 || !isSameDay(set.created.value.toLocal(), previousItem.created.value.toLocal()));
 
         return material.Column(
           children: [
-            if (divider)
+            if (showDivider)
               material.Row(
                 children: [
                   const material.Expanded(child: Divider()),
@@ -399,7 +425,7 @@ class GraphsPageState extends State<GraphsPage>
                   Selector<SettingsState, String>(
                     selector: (p0, p1) => p1.value.shortDateFormat,
                     builder: (context, format, child) =>
-                        Text(DateFormat(format).format(created)),
+                        Text(DateFormat(format).format(set.created.value.toLocal())),
                   ),
                   const SizedBox(width: 4),
                   const material.Expanded(child: Divider()),
