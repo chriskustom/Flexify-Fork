@@ -32,6 +32,7 @@ class GraphsPage extends StatefulWidget {
   @override
   createState() => GraphsPageState();
 }
+
 class GraphsPageState extends State<GraphsPage>
     with AutomaticKeepAliveClientMixin {
   late final Stream<List<GymSetsCompanion>> stream = watchGraphs();
@@ -407,18 +408,15 @@ class GraphsPageState extends State<GraphsPage>
         final set = gymSets.elementAtOrNull(currentIdx);
         if (set == null) return const SizedBox();
 
-        final prev = currentIdx > 0 ? gymSets[currentIdx - 1] : null;
+        final previousItem = currentIdx > 0 ? gymSets[currentIdx - 1] : set;
 
-        final created = prev?.created.value.toLocal();
-
-        final divider =
-            sort != GraphSort.name &&
-                created != null &&
-                !isSameDay(created, set.created.value);
+        final bool showDivider =
+            sort != GraphSort.name
+                && (currentIdx == 0 || !isSameDay(set.created.value.toLocal(), previousItem.created.value.toLocal()));
 
         return material.Column(
           children: [
-            if (divider)
+            if (showDivider)
               material.Row(
                 children: [
                   const material.Expanded(child: Divider()),
@@ -427,7 +425,7 @@ class GraphsPageState extends State<GraphsPage>
                   Selector<SettingsState, String>(
                     selector: (p0, p1) => p1.value.shortDateFormat,
                     builder: (context, format, child) =>
-                        Text(DateFormat(format).format(created)),
+                        Text(DateFormat(format).format(set.created.value.toLocal())),
                   ),
                   const SizedBox(width: 4),
                   const material.Expanded(child: Divider()),

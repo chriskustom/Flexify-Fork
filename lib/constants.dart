@@ -35,7 +35,9 @@ enum GraphSort {
   dateDesc,
   dateAsc,
   name,
-}final defaultSettings = SettingsCompanion.insert(
+}
+
+final defaultSettings = SettingsCompanion.insert(
   themeMode: ThemeMode.system.toString(),
   planTrailing: PlanTrailing.reorder.toString(),
   longDateFormat: 'timeago',
@@ -53,7 +55,7 @@ enum GraphSort {
   showBodyWeight: const Value(true),
   strengthUnit: 'kg',
   systemColors: false,
-  showCategories: const Value(true)
+  showCategories: const Value(true),
 );
 
 const positiveReinforcement = [
