@@ -116,7 +116,7 @@ class TimerState extends ChangeNotifier {
       android: AndroidInitializationSettings('ic_launcher'),
       windows: WindowsInitializationSettings(
         appName: 'Flexify',
-        appUserModelId: 'com.presley.flexify',
+        appUserModelId: 'com.kustom.flexifyfork',
         guid: '550e8400-e29b-41d4-a716-446655440000',
         iconPath: 'assets/ic_launcher.png',
       ),

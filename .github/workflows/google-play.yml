@@ -57,7 +57,7 @@ jobs:
           bundle exec fastlane supply \
             --aab app-release.aab \
             --json_key google-play-key.json \
-            --package_name com.presley.flexify \
+            --package_name com.kustom.flexifyfork \
             --track production
 
       - name: Tag latest commit as deployed

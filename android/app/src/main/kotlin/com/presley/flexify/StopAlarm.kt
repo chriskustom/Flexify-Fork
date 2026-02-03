@@ -1,4 +1,4 @@
-package com.presley.flexify
+package com.kustom.flexifyfork
 
 import android.app.Activity
 import android.content.Intent

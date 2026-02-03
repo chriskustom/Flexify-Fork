@@ -1,4 +1,4 @@
-package com.presley.flexify
+package com.kustom.flexifyfork
 
 import android.app.AlarmManager
 import android.app.AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED

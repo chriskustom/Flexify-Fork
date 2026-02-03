@@ -35,23 +35,21 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
   Widget build(BuildContext context) {
     final showImages = context
         .select<SettingsState, bool>((settings) => settings.value.showImages);
+    final sortedDays = List.from(widget.days)..sort((a,b) => b.day.compareTo(a.day));
 
     return ListView.builder(
       itemCount: widget.days.length,
       padding: const EdgeInsets.only(bottom: 96, top: 8),
       controller: widget.scroll,
       itemBuilder: (context, index) {
-        final history = widget.days[index];
-        final prev = index > 0 ? widget.days[index - 1] : null;
-
-        final bool showDivider =
-            prev != null && !isSameDay(history.day, prev.day);
+        final currentItem = sortedDays[index];
+        final previousItem = index > 0 ? sortedDays[index - 1] : currentItem;
+        final bool showDivider = index == 0 || !isSameDay(currentItem.day, previousItem.day);
 
         return Column(
           children: historyChildren(
             showDivider,
-            prev,
-            history,
+            currentItem,
             context,
             showImages,
           ),
@@ -67,12 +65,11 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
   }
 
   List<Widget> historyChildren(
-    bool showDivider,
-    HistoryDay? prev,
-    HistoryDay history,
-    BuildContext context,
-    bool showImages,
-  ) {
+      bool showDivider,
+      HistoryDay history,
+      BuildContext context,
+      bool showImages,
+      ) {
     return [
       if (showDivider)
         Row(
@@ -83,7 +80,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
             Selector<SettingsState, String>(
               selector: (context, settings) => settings.value.shortDateFormat,
               builder: (context, value, child) => Text(
-                DateFormat(value).format(prev!.day),
+                DateFormat(value).format(history.day),
               ),
             ),
             const SizedBox(width: 4),

@@ -3,7 +3,7 @@
 # https://docs.fastlane.tools/actions/deliver/
 
 username 'brandon@presley.nz'
-app_identifier 'com.presley.flexify'
+app_identifier 'com.kustom.flexifyfork'
 force true
 automatic_release true
 api_key_path "/Users/brandon/app-store-connect.json"
