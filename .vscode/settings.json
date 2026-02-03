@@ -1,7 +1,9 @@
 {
   "git.detectSubmodules": false,
   "git.detectSubmodulesLimit": 0,
-  "dart.analysisExcludedFolders": ["flutter"],
+  "dart.analysisExcludedFolders": [
+    "flutter"
+  ],
   "files.exclude": {
     "**/.git": true,
     "**/.svn": true,
@@ -16,5 +18,5 @@
     "source.fixAll": "always",
     "source.organizeImports": "always"
   },
-  "dart.flutterSdkPath": "./flutter"
+  "dart.flutterSdkPath": ""
 }

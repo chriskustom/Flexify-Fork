@@ -12,6 +12,7 @@ import 'package:flexify/settings/settings_state.dart';
 import 'package:flexify/utils.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -193,61 +194,65 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
               if (snapshot.hasError)
                 Expanded(child: ErrorWidget(snapshot.error.toString())),
               if (snapshot.hasData)
-                Expanded(
-                  child: Builder(
-                    builder: (context) {
-                      final groupHistory = context.select<SettingsState, bool>(
-                        (settings) => settings.value.groupHistory,
-                      );
-
-                      if (groupHistory) {
-                        final historyDays = getHistoryDays(snapshot.data!);
-                        return HistoryCollapsed(
-                          scroll: scroll,
-                          days: historyDays,
-                          onSelect: (id) {
-                            if (selected.contains(id))
-                              setState(() {
-                                selected.remove(id);
-                              });
-                            else
-                              setState(() {
-                                selected.add(id);
-                              });
-                          },
-                          selected: selected,
-                          onNext: () {
-                            setState(() {
-                              limit += 100;
-                            });
-                            setStream();
-                          },
-                        );
-                      } else
-                        return HistoryList(
-                          scroll: scroll,
-                          sets: snapshot.data!,
-                          onSelect: (id) {
-                            if (selected.contains(id))
-                              setState(() {
-                                selected.remove(id);
-                              });
-                            else
-                              setState(() {
-                                selected.add(id);
-                              });
-                          },
-                          selected: selected,
-                          onNext: () {
-                            setState(() {
-                              limit += 100;
-                            });
-                            setStream();
-                          },
-                        );
-                    },
-                  ),
+                material.Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: getLastWorkout(snapshot.data!),
                 ),
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final groupHistory = context.select<SettingsState, bool>(
+                      (settings) => settings.value.groupHistory,
+                    );
+
+                    if (groupHistory) {
+                      final historyDays = getHistoryDays(snapshot.data!);
+                      return HistoryCollapsed(
+                        scroll: scroll,
+                        days: historyDays,
+                        onSelect: (id) {
+                          if (selected.contains(id))
+                            setState(() {
+                              selected.remove(id);
+                            });
+                          else
+                            setState(() {
+                              selected.add(id);
+                            });
+                        },
+                        selected: selected,
+                        onNext: () {
+                          setState(() {
+                            limit += 100;
+                          });
+                          setStream();
+                        },
+                      );
+                    } else
+                      return HistoryList(
+                        scroll: scroll,
+                        sets: snapshot.data!,
+                        onSelect: (id) {
+                          if (selected.contains(id))
+                            setState(() {
+                              selected.remove(id);
+                            });
+                          else
+                            setState(() {
+                              selected.add(id);
+                            });
+                        },
+                        selected: selected,
+                        onNext: () {
+                          setState(() {
+                            limit += 100;
+                          });
+                          setStream();
+                        },
+                      );
+                  },
+                ),
+              ),
             ],
           );
         },
@@ -323,6 +328,97 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
         historyDays[index].gymSets.add(gymSet);
     }
     return historyDays;
+  }
+
+  List<Widget> getLastWorkout(List<GymSet> history) {
+    List<Widget> retval = [];
+    var sortedDays = getHistoryDays(history);
+    sortedDays.sort((a, b) => a.day.compareTo(b.day));
+    var totalWorkout =
+        sortedDays.where((d) => d.day == sortedDays.first.day).toList();
+
+    var cardioUnit = totalWorkout.first.gymSets.any((n) => n.cardio)
+        ? totalWorkout.first.gymSets.firstWhere((n) => n.cardio).unit
+        : '';
+    var weightUnit = totalWorkout.first.gymSets.any((n) => !n.cardio)
+        ? totalWorkout.first.gymSets.firstWhere((n) => !n.cardio).unit
+        : '';
+    var totalSets = 0;
+    double totalReps = 0;
+    var totalExercises = totalWorkout.length;
+    double totalDistance = 0;
+    double totalWeight = 0;
+    for (var exercise in totalWorkout) {
+      totalSets += exercise.gymSets.length;
+      for (var set in exercise.gymSets) {
+        totalReps += set.reps;
+        totalDistance += set.distance;
+        totalWeight += set.weight;
+      }
+    }
+    var daysSince = DateTime.now().difference(sortedDays.first.day).inDays;
+    retval.add(
+      SizedBox(
+        height: 8,
+      ),
+    );
+    retval.add(
+      Selector<SettingsState, String>(
+        selector: (context, settings) {
+          final format = settings.value.shortDateFormat;
+          return DateFormat(format).format(sortedDays.first.day);
+        },
+        builder: (context, formattedDate, child) {
+          return ListTile(
+            title: Text(
+              'You last worked out $daysSince days ago on $formattedDate',
+            ),
+            subtitle: material.Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 16,
+                ),
+                Text(
+                  'STATS',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.left,
+                ),
+                Divider(),
+                Text(
+                  '$totalExercises exercise${totalExercises > 1 ? 's' : ''} completed',
+                  textAlign: TextAlign.left,
+                ),
+                Text(
+                  '$totalSets set${totalSets > 1 ? 's' : ''} completed',
+                  textAlign: TextAlign.left,
+                ),
+                Text(
+                  '$totalReps rep${totalReps > 1 ? 's' : ''} completed',
+                  textAlign: TextAlign.left,
+                ),
+                if (totalWeight > 0)
+                  Text(
+                    '$totalWeight$weightUnit total lifted',
+                    textAlign: TextAlign.left,
+                  ),
+                if (totalDistance > 0)
+                  Text(
+                    '$totalDistance$cardioUnit total travelled',
+                    textAlign: TextAlign.left,
+                  ),
+                SizedBox(
+                  height: 16,
+                ),
+                Text('HISTORY'),
+                Divider(),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+    return retval;
   }
 
   @override
