@@ -82,12 +82,18 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
   final weightLt = TextEditingController();
   final scroll = ScrollController();
 
+  List<Widget> lastWorkout = [];
   Set<int> selected = {};
   String search = '';
   int limit = 100;
   DateTime? startDate;
   DateTime? endDate;
   String? category;
+
+  void getLastWO(Future<List<GymSet>> sets) async {
+    final s = await sets;
+    lastWorkout = await getLastWorkout(s);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +102,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
       body: StreamBuilder(
         stream: stream,
         builder: (context, snapshot) {
+          getLastWO(stream.first);
           return material.Column(
             children: [
               AppSearch(
@@ -196,7 +203,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
               if (snapshot.hasData)
                 material.Column(
                   mainAxisAlignment: MainAxisAlignment.start,
-                  children: getLastWorkout(snapshot.data!),
+                  children: lastWorkout,
                 ),
               Expanded(
                 child: Builder(
@@ -206,7 +213,9 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                     );
 
                     if (groupHistory) {
-                      final historyDays = getHistoryDays(snapshot.data!);
+                      final historyDays = getHistoryDays(
+                        snapshot.hasData ? snapshot.data! : [],
+                      );
                       return HistoryCollapsed(
                         scroll: scroll,
                         days: historyDays,
@@ -231,7 +240,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                     } else
                       return HistoryList(
                         scroll: scroll,
-                        sets: snapshot.data!,
+                        sets: snapshot.hasData ? snapshot.data! : [],
                         onSelect: (id) {
                           if (selected.contains(id))
                             setState(() {
@@ -330,9 +339,21 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
     return historyDays;
   }
 
-  List<Widget> getLastWorkout(List<GymSet> history) {
+  Future<List<material.Widget>> getLastWorkout(List<GymSet> sets) async {
     List<Widget> retval = [];
-    var sortedDays = getHistoryDays(history);
+
+    DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+    final today = dayOnly(DateTime.now());
+
+    final mostRecentDay = sets
+        .map((s) => dayOnly(s.created))
+        .where((d) => !d.isAfter(today))
+        .reduce((a, b) => a.isAfter(b) ? a : b);
+
+    final result =
+        sets.where((s) => dayOnly(s.created) == mostRecentDay).toList();
+    var sortedDays = getHistoryDays(result);
     sortedDays.sort((a, b) => a.day.compareTo(b.day));
     var totalWorkout =
         sortedDays.where((d) => d.day == sortedDays.first.day).toList();
@@ -344,14 +365,14 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
         ? totalWorkout.first.gymSets.firstWhere((n) => !n.cardio).unit
         : '';
     var totalSets = 0;
-    double totalReps = 0;
+    var totalReps = 0;
     var totalExercises = totalWorkout.length;
     double totalDistance = 0;
     double totalWeight = 0;
     for (var exercise in totalWorkout) {
       totalSets += exercise.gymSets.length;
       for (var set in exercise.gymSets) {
-        totalReps += set.reps;
+        totalReps += set.reps.toInt();
         totalDistance += set.distance;
         totalWeight += set.weight;
       }

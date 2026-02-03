@@ -25,7 +25,7 @@ class GraphsFilters extends StatefulWidget {
 class _GraphsFiltersState extends State<GraphsFilters> {
   int get count =>
       (widget.category != null ? 1 : 0) +
-          (widget.sort != GraphSort.dateDesc ? 1 : 0);
+      (widget.sort != GraphSort.dateDesc ? 1 : 0);
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +44,7 @@ class _GraphsFiltersState extends State<GraphsFilters> {
                 enabled: false,
                 child: DropdownButtonFormField<GraphSort>(
                   decoration: const InputDecoration(labelText: 'Sort by'),
-                  value: widget.sort,
+                  initialValue: widget.sort,
                   items: const [
                     DropdownMenuItem(
                       value: GraphSort.dateDesc,
@@ -66,19 +66,18 @@ class _GraphsFiltersState extends State<GraphsFilters> {
                   },
                 ),
               ),
-
               PopupMenuItem(
                 enabled: false,
                 child: DropdownButtonFormField<String>(
                   decoration: const InputDecoration(labelText: 'Category'),
-                  value: widget.category,
+                  initialValue: widget.category,
                   items: snapshot.data
                       ?.map(
                         (category) => DropdownMenuItem(
-                      value: category,
-                      child: Text(category),
-                    ),
-                  )
+                          value: category,
+                          child: Text(category),
+                        ),
+                      )
                       .toList(),
                   onChanged: (value) {
                     widget.setCategory(value);
@@ -86,7 +85,6 @@ class _GraphsFiltersState extends State<GraphsFilters> {
                   },
                 ),
               ),
-
               PopupMenuItem(
                 child: ListTile(
                   leading: const Icon(Icons.clear),
@@ -104,5 +102,4 @@ class _GraphsFiltersState extends State<GraphsFilters> {
       ),
     );
   }
-
 }
