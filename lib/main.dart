@@ -30,7 +30,7 @@ Future<void> main() async {
 AppDatabase db = AppDatabase();
 
 MethodChannel androidChannel =
-    const MethodChannel("com.presley.flexify/android");
+    const MethodChannel("com.kustom.flexifyfork/android");
 
 Widget appProviders(SettingsState state) => MultiProvider(
       providers: [

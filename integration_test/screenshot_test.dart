@@ -273,7 +273,7 @@ void main() {
 
   setUpAll(() async {
     app.db = AppDatabase();
-    app.androidChannel = const MethodChannel("com.presley.flexify/timer");
+    app.androidChannel = const MethodChannel("com.kustom.flexifyfork/timer");
     IntegrationTestWidgetsFlutterBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(app.androidChannel, (message) => null);
 

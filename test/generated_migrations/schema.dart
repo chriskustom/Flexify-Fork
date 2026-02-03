@@ -9,7 +9,7 @@ class GeneratedHelper implements SchemaInstantiationHelper {
   GeneratedDatabase databaseForVersion(QueryExecutor db, int version) {
     switch (version) {
       default:
-        throw MissingSchemaException(version, versions);
+        throw MissingSchemaException(version, versions as Iterable<int>);
     }
   }
 
