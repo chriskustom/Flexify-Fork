@@ -340,10 +340,8 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
   }
 
   Future<List<material.Widget>> getLastWorkout(List<GymSet> sets) async {
-    List<Widget> retval = [];
-
     DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-
+    String plural(int s) => s > 1 ? 's' : '';
     final today = dayOnly(DateTime.now());
 
     final mostRecentDay = sets
@@ -377,23 +375,22 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
         totalWeight += set.weight;
       }
     }
-    var daysSince = DateTime.now().difference(sortedDays.first.day).inDays;
-    retval.add(
+    return [
       SizedBox(
         height: 8,
       ),
-    );
-    retval.add(
       Selector<SettingsState, String>(
         selector: (context, settings) {
           final format = settings.value.shortDateFormat;
           return DateFormat(format).format(sortedDays.first.day);
         },
         builder: (context, formattedDate, child) {
+          var daysSince =
+              DateTime.now().difference(sortedDays.first.day).inDays;
+          var lastWorkout =
+              'You last worked out ${daysSince == 0 ? 'today.' : daysSince == 1 ? 'yesterday.' : '$daysSince days ago on $formattedDate.'}';
           return ListTile(
-            title: Text(
-              'You last worked out $daysSince days ago on $formattedDate',
-            ),
+            title: Text(lastWorkout),
             subtitle: material.Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -407,25 +404,25 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                 ),
                 Divider(),
                 Text(
-                  '$totalExercises exercise${totalExercises > 1 ? 's' : ''} completed',
+                  '$totalExercises exercise${plural(totalExercises)} completed.',
                   textAlign: TextAlign.left,
                 ),
                 Text(
-                  '$totalSets set${totalSets > 1 ? 's' : ''} completed',
+                  '$totalSets set${plural(totalSets)} completed.',
                   textAlign: TextAlign.left,
                 ),
                 Text(
-                  '$totalReps rep${totalReps > 1 ? 's' : ''} completed',
+                  '$totalReps rep${plural(totalReps)} completed.',
                   textAlign: TextAlign.left,
                 ),
                 if (totalWeight > 0)
                   Text(
-                    '$totalWeight$weightUnit total lifted',
+                    '$totalWeight$weightUnit total lifted.',
                     textAlign: TextAlign.left,
                   ),
                 if (totalDistance > 0)
                   Text(
-                    '$totalDistance$cardioUnit total travelled',
+                    '$totalDistance$cardioUnit total travelled.',
                     textAlign: TextAlign.left,
                   ),
                 SizedBox(
@@ -438,8 +435,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
           );
         },
       ),
-    );
-    return retval;
+    ];
   }
 
   @override
