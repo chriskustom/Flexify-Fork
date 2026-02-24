@@ -1,0 +1,1 @@
+• Add spacing to view x-axis on strength page
