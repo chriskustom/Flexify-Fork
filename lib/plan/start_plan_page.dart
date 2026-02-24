@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:drift/drift.dart';
@@ -5,6 +6,7 @@ import 'package:flexify/animated_fab.dart';
 import 'package:flexify/constants.dart';
 import 'package:flexify/database/database.dart';
 import 'package:flexify/database/gym_sets.dart';
+import 'package:flexify/graph/graph_history_page.dart';
 import 'package:flexify/main.dart';
 import 'package:flexify/permissions_page.dart';
 import 'package:flexify/plan/edit_plan_page.dart';
@@ -44,6 +46,7 @@ class _StartPlanPageState extends State<StartPlanPage>
   List<Rpm>? rpms;
   String? category;
   String? image;
+  String? currentExercise;
 
   late Stream<List<PlanExercise>> stream;
   late PlanState planState = context.read<PlanState>();
@@ -69,6 +72,53 @@ class _StartPlanPageState extends State<StartPlanPage>
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
+              if (currentExercise != null) ...[
+                IconButton(
+                  onPressed: () async {
+                    final gymSets = await (db.gymSets.select()
+                          ..orderBy(
+                            [
+                              (u) => OrderingTerm(
+                                    expression: u.created,
+                                    mode: OrderingMode.desc,
+                                  ),
+                            ],
+                          )
+                          ..where((tbl) => tbl.name.equals(currentExercise!))
+                          ..where((tbl) => tbl.hidden.equals(false))
+                          ..limit(20))
+                        .get();
+                    if (!context.mounted) return;
+                    setState(() {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        builder: (context) {
+                          return FractionallySizedBox(
+                            heightFactor: .8,
+                            widthFactor: .8,
+                            child: Container(
+                              clipBehavior: material.Clip.antiAlias,
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(24),
+                                ),
+                              ),
+                              child: GraphHistoryPage(
+                                name: currentExercise!,
+                                gymSets: gymSets,
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    });
+                  },
+                  icon: const Icon(Icons.history),
+                  tooltip: "History",
+                ),
+              ],
               IconButton(
                 onPressed: () async {
                   final plan = await (db.plans.select()
@@ -468,6 +518,7 @@ class _StartPlanPageState extends State<StartPlanPage>
     category = gymSet.category;
     image = gymSet.image;
     notes.text = gymSet.notes ?? "";
+    currentExercise = gymSet.name;
   }
 
   void planChanged() {
