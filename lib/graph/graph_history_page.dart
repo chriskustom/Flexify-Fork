@@ -69,8 +69,10 @@ class _GraphHistoryPageState extends State<GraphHistoryPage> {
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ctrl = DefaultTabController.of(context);
-      ctrl?.addListener(tabListener);
+      try {
+        ctrl = DefaultTabController.of(context);
+        ctrl?.addListener(tabListener);
+      } catch (_) {/* ignored */}
     });
   }
 
