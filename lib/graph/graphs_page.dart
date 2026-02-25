@@ -366,42 +366,41 @@ class GraphsPageState extends State<GraphsPage>
           }
           currentIdx--;
         }
-
-        if (showPeekGraph && currentIdx == 1) {
-          return Consumer<SettingsState>(
-            builder: (
-              BuildContext context,
-              SettingsState settings,
-              Widget? child,
-            ) {
-              if (!settings.value.peekGraph) return const SizedBox();
-              if (_grouped.entries.firstOrNull == null) return const SizedBox();
-
-              return FutureBuilder(
-                builder: (context, snapshot) => snapshot.data != null
-                    ? getPeek(
-                        _grouped.entries.first.value.first,
-                        snapshot.data!,
-                        settings.value.shortDateFormat,
-                      )
-                    : const SizedBox(),
-                future: _grouped.entries.first.value.first.cardio.value
-                    ? getCardioData(
-                        name: _grouped.entries.first.value.first.name.value,
-                      )
-                    : getStrengthData(
-                        target: _grouped.entries.first.value.first.unit.value,
-                        name: _grouped.entries.first.value.first.name.value,
-                        metric: StrengthMetric.bestWeight,
-                        period: Period.day,
-                        start: null,
-                        end: null,
-                        limit: 20,
-                      ),
-              );
-            },
-          );
-        }
+        bool peek = showPeekGraph && currentIdx == 0;
+        // if (showPeekGraph && currentIdx == 1) {
+        //   return Consumer<SettingsState>(
+        //     builder: (
+        //       BuildContext context,
+        //       SettingsState settings,
+        //       Widget? child,
+        //     ) {
+        //       if (!settings.value.peekGraph) return const SizedBox();
+        //       if (_grouped.entries.firstOrNull == null) return const SizedBox();
+        //       return FutureBuilder(
+        //         builder: (context, snapshot) => snapshot.data != null
+        //             ? getPeek(
+        //                 _grouped.entries.first.value.first,
+        //                 snapshot.data!,
+        //                 settings.value.shortDateFormat,
+        //               )
+        //             : const SizedBox(),
+        //         future: _grouped.entries.first.value.first.cardio.value
+        //             ? getCardioData(
+        //                 name: _grouped.entries.first.value.first.name.value,
+        //               )
+        //             : getStrengthData(
+        //                 target: _grouped.entries.first.value.first.unit.value,
+        //                 name: _grouped.entries.first.value.first.name.value,
+        //                 metric: StrengthMetric.bestWeight,
+        //                 period: Period.day,
+        //                 start: null,
+        //                 end: null,
+        //                 limit: 20,
+        //               ),
+        //       );
+        //     },
+        //   );
+        // }
 
         if (index == itemCount - 1) return const SizedBox(height: 96);
 
@@ -425,28 +424,98 @@ class GraphsPageState extends State<GraphsPage>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: List.generate(
               sets.length,
-              (index) => GraphTile(
-                selected: selected,
-                gymSet: set.value[index],
-                onSelect: (name) async {
-                  if (selected.contains(name))
+              (index) {
+                if (peek && index == 1)
+                  return material.Column(
+                    children: [
+                      Consumer<SettingsState>(
+                        builder: (
+                          BuildContext context,
+                          SettingsState settings,
+                          Widget? child,
+                        ) {
+                          if (!settings.value.peekGraph)
+                            return const SizedBox();
+                          if (_grouped.entries.firstOrNull == null)
+                            return const SizedBox();
+
+                          return FutureBuilder(
+                            builder: (context, snapshot) =>
+                                snapshot.data != null
+                                    ? getPeek(
+                                        _grouped.entries.first.value.first,
+                                        snapshot.data!,
+                                        settings.value.shortDateFormat,
+                                      )
+                                    : const SizedBox(),
+                            future:
+                                _grouped.entries.first.value.first.cardio.value
+                                    ? getCardioData(
+                                        name: _grouped.entries.first.value.first
+                                            .name.value,
+                                      )
+                                    : getStrengthData(
+                                        target: _grouped.entries.first.value
+                                            .first.unit.value,
+                                        name: _grouped.entries.first.value.first
+                                            .name.value,
+                                        metric: StrengthMetric.bestWeight,
+                                        period: Period.day,
+                                        start: null,
+                                        end: null,
+                                        limit: 20,
+                                      ),
+                          );
+                        },
+                      ),
+                      GraphTile(
+                        selected: selected,
+                        gymSet: set.value[index],
+                        onSelect: (name) async {
+                          if (selected.contains(name))
+                            setState(() {
+                              selected.remove(name);
+                            });
+                          else
+                            setState(() {
+                              selected.add(name);
+                            });
+                          final result = await (db.gymSets.selectOnly()
+                                ..addColumns([db.gymSets.name.count()])
+                                ..where(db.gymSets.name.isIn(selected)))
+                              .getSingle();
+                          setState(() {
+                            total = result.read(db.gymSets.name.count()) ?? 0;
+                          });
+                        },
+                        tabCtrl: widget.tabController,
+                      ),
+                    ],
+                  );
+
+                return GraphTile(
+                  selected: selected,
+                  gymSet: set.value[index],
+                  onSelect: (name) async {
+                    if (selected.contains(name))
+                      setState(() {
+                        selected.remove(name);
+                      });
+                    else
+                      setState(() {
+                        selected.add(name);
+                      });
+                    final result = await (db.gymSets.selectOnly()
+                          ..addColumns([db.gymSets.name.count()])
+                          ..where(db.gymSets.name.isIn(selected)))
+                        .getSingle();
                     setState(() {
-                      selected.remove(name);
+                      total = result.read(db.gymSets.name.count()) ?? 0;
                     });
-                  else
-                    setState(() {
-                      selected.add(name);
-                    });
-                  final result = await (db.gymSets.selectOnly()
-                        ..addColumns([db.gymSets.name.count()])
-                        ..where(db.gymSets.name.isIn(selected)))
-                      .getSingle();
-                  setState(() {
-                    total = result.read(db.gymSets.name.count()) ?? 0;
-                  });
-                },
-                tabCtrl: widget.tabController,
-              ),
+                  },
+                  tabCtrl: widget.tabController,
+                );
+              },
             ),
           ),
         );

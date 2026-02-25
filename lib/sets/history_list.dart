@@ -247,7 +247,7 @@ class _HistoryListState extends State<HistoryList> {
 
     return ListView.builder(
       controller: widget.scroll,
-      padding: const EdgeInsets.only(top: 8, bottom: 96),
+      padding: const EdgeInsets.only(bottom: 96),
       itemCount: _grouped.entries.length,
       itemBuilder: (context, sectionIndex) {
         final entry = _grouped.entries.elementAt(sectionIndex);

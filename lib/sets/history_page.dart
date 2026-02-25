@@ -202,6 +202,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                   data: Theme.of(context)
                       .copyWith(dividerColor: Colors.transparent),
                   child: ExpansionTile(
+                    childrenPadding: EdgeInsets.all(0),
                     iconColor: Theme.of(context).colorScheme.onSurface,
                     leading: Icon(
                       expand.isExpanded
@@ -403,7 +404,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
         var lastWorkout =
             'You last worked out ${daysSince == 0 ? 'today.' : daysSince == 1 ? 'yesterday.' : '$daysSince days ago on $formattedDate.'}';
         return Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8),
+          padding: EdgeInsets.only(left: 8, right: 8),
           child: ListTile(
             title: Text(lastWorkout),
             subtitle: material.Column(
@@ -411,11 +412,6 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
               children: [
                 SizedBox(
                   height: 16,
-                ),
-                Text(
-                  'STATS',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.left,
                 ),
                 Divider(),
                 Text(
@@ -440,10 +436,6 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                     '$totalDistance$cardioUnit total travelled',
                     textAlign: TextAlign.left,
                   ),
-                SizedBox(
-                  height: 16,
-                ),
-                //Text('HISTORY'),
               ],
             ),
           ),
