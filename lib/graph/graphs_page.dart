@@ -21,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:sticky_headers/sticky_headers/widget.dart';
 
 import 'graph_tile.dart';
 
@@ -169,21 +170,21 @@ class GraphsPageState extends State<GraphsPage>
           switch (sort) {
             case GraphSort.dateDesc:
               gymSets.sort(
-                    (a, b) => b.created.value.compareTo(a.created.value),
+                (a, b) => b.created.value.compareTo(a.created.value),
               );
               break;
 
             case GraphSort.dateAsc:
               gymSets.sort(
-                    (a, b) => a.created.value.compareTo(b.created.value),
+                (a, b) => a.created.value.compareTo(b.created.value),
               );
               break;
 
             case GraphSort.name:
               gymSets.sort(
-                    (a, b) => a.name.value.toLowerCase().compareTo(
-                  b.name.value.toLowerCase(),
-                ),
+                (a, b) => a.name.value.toLowerCase().compareTo(
+                      b.name.value.toLowerCase(),
+                    ),
               );
               break;
           }
@@ -337,7 +338,7 @@ class GraphsPageState extends State<GraphsPage>
     final settings = context.read<SettingsState>().value;
     final showPeekGraph = settings.peekGraph && gymSets.firstOrNull != null;
     if (showPeekGraph) itemCount++;
-
+    _grouped = _groupByDay(gymSets);
     return ListView.builder(
       itemCount: itemCount,
       controller: scroll,
@@ -408,54 +409,93 @@ class GraphsPageState extends State<GraphsPage>
         final set = gymSets.elementAtOrNull(currentIdx);
         if (set == null) return const SizedBox();
 
-        final previousItem = currentIdx > 0 ? gymSets[currentIdx - 1] : set;
+        final entry = _grouped.entries.elementAt(currentIdx);
+        final date = entry.key;
+        final sets = entry.value;
 
-        final bool showDivider =
-            sort != GraphSort.name
-                && (currentIdx == 0 || !isSameDay(set.created.value.toLocal(), previousItem.created.value.toLocal()));
-
-        return material.Column(
-          children: [
-            if (showDivider)
-              material.Row(
-                children: [
-                  const material.Expanded(child: Divider()),
-                  const Icon(Icons.today),
-                  const SizedBox(width: 4),
-                  Selector<SettingsState, String>(
-                    selector: (p0, p1) => p1.value.shortDateFormat,
-                    builder: (context, format, child) =>
-                        Text(DateFormat(format).format(set.created.value.toLocal())),
-                  ),
-                  const SizedBox(width: 4),
-                  const material.Expanded(child: Divider()),
-                ],
+        return StickyHeader(
+          header: Container(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            alignment: Alignment.center,
+            child: _buildSectionDivider(date),
+          ),
+          content: material.Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: List.generate(
+              sets.length,
+              (index) => GraphTile(
+                selected: selected,
+                gymSet: set,
+                onSelect: (name) async {
+                  if (selected.contains(name))
+                    setState(() {
+                      selected.remove(name);
+                    });
+                  else
+                    setState(() {
+                      selected.add(name);
+                    });
+                  final result = await (db.gymSets.selectOnly()
+                        ..addColumns([db.gymSets.name.count()])
+                        ..where(db.gymSets.name.isIn(selected)))
+                      .getSingle();
+                  setState(() {
+                    total = result.read(db.gymSets.name.count()) ?? 0;
+                  });
+                },
+                tabCtrl: widget.tabController,
               ),
-            GraphTile(
-              selected: selected,
-              gymSet: set,
-              onSelect: (name) async {
-                if (selected.contains(name))
-                  setState(() {
-                    selected.remove(name);
-                  });
-                else
-                  setState(() {
-                    selected.add(name);
-                  });
-                final result = await (db.gymSets.selectOnly()
-                      ..addColumns([db.gymSets.name.count()])
-                      ..where(db.gymSets.name.isIn(selected)))
-                    .getSingle();
-                setState(() {
-                  total = result.read(db.gymSets.name.count()) ?? 0;
-                });
-              },
-              tabCtrl: widget.tabController,
             ),
-          ],
+          ),
         );
       },
     );
+  }
+
+  Widget _buildSectionDivider(DateTime date) {
+    final format = context.read<SettingsState>().value.shortDateFormat;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          const Expanded(child: Divider(thickness: 1)),
+          const SizedBox(width: 4),
+          const Icon(Icons.today, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            DateFormat(format).format(date),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 4),
+          const Expanded(child: Divider(thickness: 1)),
+        ],
+      ),
+    );
+  }
+
+  Map<DateTime, List<GymSetsCompanion>> _grouped = {};
+  Map<DateTime, List<GymSetsCompanion>> _groupByDay(
+    List<GymSetsCompanion> sets,
+  ) {
+    final map = <DateTime, List<GymSetsCompanion>>{};
+
+    for (final set in sets) {
+      final day = DateTime(
+        set.created.value.year,
+        set.created.value.month,
+        set.created.value.day,
+      );
+
+      map.putIfAbsent(day, () => []);
+      map[day]!.add(set);
+    }
+
+    // Optional: sort newest first
+    final sortedKeys = map.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return {
+      for (final key in sortedKeys) key: map[key]!,
+    };
   }
 }
