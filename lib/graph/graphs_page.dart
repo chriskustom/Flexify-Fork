@@ -329,16 +329,17 @@ class GraphsPageState extends State<GraphsPage>
     List<GymSetsCompanion> gymSets,
     bool showGlobalProgress,
   ) {
-    var itemCount = gymSets.length + 1;
+    _grouped = _groupByDay(gymSets);
+    var itemCount = _grouped.entries.length + 1;
     final showGlobal = 'global graphs'.contains(search.toLowerCase()) &&
         category == null &&
         showGlobalProgress;
     if (showGlobal) itemCount++;
 
     final settings = context.read<SettingsState>().value;
-    final showPeekGraph = settings.peekGraph && gymSets.firstOrNull != null;
+    final showPeekGraph =
+        settings.peekGraph && _grouped.entries.firstOrNull != null;
     if (showPeekGraph) itemCount++;
-    _grouped = _groupByDay(gymSets);
     return ListView.builder(
       itemCount: itemCount,
       controller: scroll,
@@ -374,21 +375,23 @@ class GraphsPageState extends State<GraphsPage>
               Widget? child,
             ) {
               if (!settings.value.peekGraph) return const SizedBox();
-              if (gymSets.firstOrNull == null) return const SizedBox();
+              if (_grouped.entries.firstOrNull == null) return const SizedBox();
 
               return FutureBuilder(
                 builder: (context, snapshot) => snapshot.data != null
                     ? getPeek(
-                        gymSets.first,
+                        _grouped.entries.first.value.first,
                         snapshot.data!,
                         settings.value.shortDateFormat,
                       )
                     : const SizedBox(),
-                future: gymSets.first.cardio.value
-                    ? getCardioData(name: gymSets.first.name.value)
+                future: _grouped.entries.first.value.first.cardio.value
+                    ? getCardioData(
+                        name: _grouped.entries.first.value.first.name.value,
+                      )
                     : getStrengthData(
-                        target: gymSets.first.unit.value,
-                        name: gymSets.first.name.value,
+                        target: _grouped.entries.first.value.first.unit.value,
+                        name: _grouped.entries.first.value.first.name.value,
                         metric: StrengthMetric.bestWeight,
                         period: Period.day,
                         start: null,
@@ -406,12 +409,10 @@ class GraphsPageState extends State<GraphsPage>
           currentIdx--;
         }
 
-        final set = gymSets.elementAtOrNull(currentIdx);
+        final set = _grouped.entries.elementAtOrNull(currentIdx);
         if (set == null) return const SizedBox();
-
-        final entry = _grouped.entries.elementAt(currentIdx);
-        final date = entry.key;
-        final sets = entry.value;
+        final date = set.key;
+        final sets = set.value;
 
         return StickyHeader(
           header: Container(
@@ -426,7 +427,7 @@ class GraphsPageState extends State<GraphsPage>
               sets.length,
               (index) => GraphTile(
                 selected: selected,
-                gymSet: set,
+                gymSet: set.value[index],
                 onSelect: (name) async {
                   if (selected.contains(name))
                     setState(() {
