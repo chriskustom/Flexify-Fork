@@ -201,22 +201,17 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                 Theme(
                   data: Theme.of(context)
                       .copyWith(dividerColor: Colors.transparent),
-                  child: Padding(
-                    padding: EdgeInsets.only(left: 8, right: 8),
-                    child: ExpansionTile(
-                      iconColor: Theme.of(context).colorScheme.onSurface,
-                      backgroundColor: Colors.transparent,
-                      clipBehavior: Clip.antiAlias,
-                      leading: Icon(
-                        expand.isExpanded
-                            ? Icons.analytics_outlined
-                            : Icons.history_outlined,
-                      ),
-                      title: Text(expand.isExpanded ? 'Stats' : 'History'),
-                      initiallyExpanded: true,
-                      controller: expand,
-                      children: [lastWorkout!],
+                  child: ExpansionTile(
+                    iconColor: Theme.of(context).colorScheme.onSurface,
+                    leading: Icon(
+                      expand.isExpanded
+                          ? Icons.analytics_outlined
+                          : Icons.history_outlined,
                     ),
+                    title: Text(expand.isExpanded ? 'Stats' : 'History'),
+                    initiallyExpanded: true,
+                    controller: expand,
+                    children: [lastWorkout!],
                   ),
                 ),
               ],
@@ -409,49 +404,47 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
             'You last worked out ${daysSince == 0 ? 'today.' : daysSince == 1 ? 'yesterday.' : '$daysSince days ago on $formattedDate.'}';
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: 8),
-          child: Card(
-            child: ListTile(
-              title: Text(lastWorkout),
-              subtitle: material.Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    height: 16,
-                  ),
+          child: ListTile(
+            title: Text(lastWorkout),
+            subtitle: material.Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 16,
+                ),
+                Text(
+                  'STATS',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.left,
+                ),
+                Divider(),
+                Text(
+                  '$totalExercises exercise${plural(totalExercises)} completed',
+                  textAlign: TextAlign.left,
+                ),
+                Text(
+                  '$totalSets set${plural(totalSets)} completed',
+                  textAlign: TextAlign.left,
+                ),
+                Text(
+                  '$totalReps rep${plural(totalReps)} completed',
+                  textAlign: TextAlign.left,
+                ),
+                if (totalWeight > 0)
                   Text(
-                    'STATS',
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    '${num.parse(totalWeight.toStringAsFixed(3))}$weightUnit total lifted',
                     textAlign: TextAlign.left,
                   ),
-                  Divider(),
+                if (totalDistance > 0)
                   Text(
-                    '$totalExercises exercise${plural(totalExercises)} completed',
+                    '$totalDistance$cardioUnit total travelled',
                     textAlign: TextAlign.left,
                   ),
-                  Text(
-                    '$totalSets set${plural(totalSets)} completed',
-                    textAlign: TextAlign.left,
-                  ),
-                  Text(
-                    '$totalReps rep${plural(totalReps)} completed',
-                    textAlign: TextAlign.left,
-                  ),
-                  if (totalWeight > 0)
-                    Text(
-                      '${totalWeight.toStringAsPrecision(3)}$weightUnit total lifted',
-                      textAlign: TextAlign.left,
-                    ),
-                  if (totalDistance > 0)
-                    Text(
-                      '$totalDistance$cardioUnit total travelled',
-                      textAlign: TextAlign.left,
-                    ),
-                  SizedBox(
-                    height: 16,
-                  ),
-                  //Text('HISTORY'),
-                ],
-              ),
+                SizedBox(
+                  height: 16,
+                ),
+                //Text('HISTORY'),
+              ],
             ),
           ),
         );
