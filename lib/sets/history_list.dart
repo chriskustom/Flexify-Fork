@@ -7,6 +7,7 @@ import 'package:flexify/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:sticky_headers/sticky_headers.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class HistoryList extends StatefulWidget {
@@ -33,7 +34,7 @@ class _HistoryListState extends State<HistoryList> {
   bool goingNext = false;
   final GlobalKey<AnimatedListState> _key = GlobalKey<AnimatedListState>();
   List<GymSet> _current = [];
-
+  Map<DateTime, List<GymSet>> _grouped = {};
   @override
   void initState() {
     super.initState();
@@ -111,10 +112,11 @@ class _HistoryListState extends State<HistoryList> {
     );
   }
 
-  Widget _buildListItem(GymSet gymSet, int index, bool showImages) {
-    final previousGymSet = index > 0 ? _current[index - 1] : gymSet;
-    final bool showDivider = index == 0 || !isSameDay(gymSet.created.toLocal(), previousGymSet.created.toLocal());
-
+  Widget _buildListItem(
+    GymSet gymSet,
+    int index,
+    bool showImages,
+  ) {
     final minutes = gymSet.duration.floor();
     final seconds =
         ((gymSet.duration * 60) % 60).floor().toString().padLeft(2, '0');
@@ -131,9 +133,7 @@ class _HistoryListState extends State<HistoryList> {
       width: 24,
       child: Checkbox(
         value: widget.selected.contains(gymSet.id),
-        onChanged: (value) {
-          widget.onSelect(gymSet.id);
-        },
+        onChanged: (_) => widget.onSelect(gymSet.id),
       ),
     );
 
@@ -172,48 +172,35 @@ class _HistoryListState extends State<HistoryList> {
 
     leading = AnimatedSwitcher(
       duration: const Duration(milliseconds: 150),
-      transitionBuilder: (child, animation) {
-        return ScaleTransition(scale: animation, child: child);
-      },
+      transitionBuilder: (child, animation) =>
+          ScaleTransition(scale: animation, child: child),
       child: leading,
     );
 
     String trailing = "$reps x $weight ${gymSet.unit}";
     if (gymSet.cardio &&
-        (gymSet.unit == 'kg' || gymSet.unit == 'lb' || gymSet.unit == 'stone'))
+        (gymSet.unit == 'kg' ||
+            gymSet.unit == 'lb' ||
+            gymSet.unit == 'stone')) {
       trailing = "$weight ${gymSet.unit} / $minutes:$seconds $incline";
-    else if (gymSet.cardio &&
-        (gymSet.unit == 'km' || gymSet.unit == 'mi' || gymSet.unit == 'kcal'))
+    } else if (gymSet.cardio &&
+        (gymSet.unit == 'km' || gymSet.unit == 'mi' || gymSet.unit == 'kcal')) {
       trailing = "$distance ${gymSet.unit} / $minutes:$seconds $incline";
+    }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (showDivider)
-          Row(
-            children: [
-              const Expanded(child: Divider()),
-              const Icon(Icons.today),
-              const SizedBox(width: 4),
-              Selector<SettingsState, String>(
-                selector: (context, settings) => settings.value.shortDateFormat,
-                builder: (context, value, child) => Text(
-                  DateFormat(value).format(previousGymSet.created),
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Expanded(child: Divider()),
-            ],
-          ),
         Container(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             color: widget.selected.contains(gymSet.id)
-                ? Theme.of(context).colorScheme.primary.withValues(alpha: .08)
+                ? Theme.of(context).colorScheme.primary.withOpacity(.08)
                 : Colors.transparent,
             border: Border.all(
               color: widget.selected.contains(gymSet.id)
-                  ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
+                  ? Theme.of(context).colorScheme.primary.withOpacity(.3)
                   : Colors.transparent,
               width: 1,
             ),
@@ -256,14 +243,32 @@ class _HistoryListState extends State<HistoryList> {
   Widget build(BuildContext context) {
     final showImages = context
         .select<SettingsState, bool>((settings) => settings.value.showImages);
+    _grouped = _groupByDay(_current);
 
-    return AnimatedList(
-      key: _key,
-      initialItemCount: _current.length,
-      padding: const EdgeInsets.only(bottom: 96, top: 8),
+    return ListView.builder(
       controller: widget.scroll,
-      itemBuilder: (context, index, animation) {
-        return _buildItem(_current[index], animation, index, showImages);
+      padding: const EdgeInsets.only(top: 8, bottom: 96),
+      itemCount: _grouped.entries.length,
+      itemBuilder: (context, sectionIndex) {
+        final entry = _grouped.entries.elementAt(sectionIndex);
+        final date = entry.key;
+        final sets = entry.value;
+
+        return StickyHeader(
+          header: Container(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            alignment: Alignment.center,
+            child: _buildSectionDivider(date),
+          ),
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: List.generate(
+              sets.length,
+              (index) => _buildListItem(sets[index], index, showImages),
+            ),
+          ),
+        );
       },
     );
   }
@@ -289,4 +294,88 @@ class _HistoryListState extends State<HistoryList> {
     widget.scroll.removeListener(scrollListener);
     super.dispose();
   }
+
+  Widget _buildSectionDivider(DateTime date) {
+    final format = context.read<SettingsState>().value.shortDateFormat;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          const Expanded(child: Divider(thickness: 1)),
+          const SizedBox(width: 4),
+          const Icon(Icons.today, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            DateFormat(format).format(date),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 4),
+          const Expanded(child: Divider(thickness: 1)),
+        ],
+      ),
+    );
+  }
+
+  Map<DateTime, List<GymSet>> _groupByDay(List<GymSet> sets) {
+    final map = <DateTime, List<GymSet>>{};
+
+    for (final set in sets) {
+      final day = DateTime(
+        set.created.year,
+        set.created.month,
+        set.created.day,
+      );
+
+      map.putIfAbsent(day, () => []);
+      map[day]!.add(set);
+    }
+
+    // Optional: sort newest first
+    final sortedKeys = map.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return {
+      for (final key in sortedKeys) key: map[key]!,
+    };
+  }
+}
+
+class DateHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final DateTime date;
+
+  DateHeaderDelegate(this.date);
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Selector<SettingsState, String>(
+      selector: (context, settings) {
+        final format = settings.value.shortDateFormat;
+        return format;
+      },
+      builder: (context, format, child) {
+        return Container(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            DateFormat(format).format(date),
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  double get maxExtent => 44;
+
+  @override
+  double get minExtent => 44;
+
+  @override
+  bool shouldRebuild(DateHeaderDelegate oldDelegate) =>
+      oldDelegate.date != date;
 }

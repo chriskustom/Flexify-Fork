@@ -82,18 +82,15 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
   final weightLt = TextEditingController();
   final scroll = ScrollController();
 
-  List<Widget> lastWorkout = [];
+  final expand = ExpansibleController();
+
+  Widget? lastWorkout;
   Set<int> selected = {};
   String search = '';
   int limit = 100;
   DateTime? startDate;
   DateTime? endDate;
   String? category;
-
-  void getLastWO(Future<List<GymSet>> sets) async {
-    final s = await sets;
-    lastWorkout = await getLastWorkout(s);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +99,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
       body: StreamBuilder(
         stream: stream,
         builder: (context, snapshot) {
-          getLastWO(stream.first);
+          getStats(stream.first);
           return material.Column(
             children: [
               AppSearch(
@@ -200,11 +197,29 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                 ),
               if (snapshot.hasError)
                 Expanded(child: ErrorWidget(snapshot.error.toString())),
-              if (snapshot.hasData)
-                material.Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: lastWorkout,
+              if (snapshot.hasData) ...[
+                Theme(
+                  data: Theme.of(context)
+                      .copyWith(dividerColor: Colors.transparent),
+                  child: Padding(
+                    padding: EdgeInsets.only(left: 8, right: 8),
+                    child: ExpansionTile(
+                      iconColor: Theme.of(context).colorScheme.onSurface,
+                      backgroundColor: Colors.transparent,
+                      clipBehavior: Clip.antiAlias,
+                      leading: Icon(
+                        expand.isExpanded
+                            ? Icons.analytics_outlined
+                            : Icons.history_outlined,
+                      ),
+                      title: Text(expand.isExpanded ? 'Stats' : 'History'),
+                      initiallyExpanded: true,
+                      controller: expand,
+                      children: [lastWorkout!],
+                    ),
+                  ),
                 ),
+              ],
               Expanded(
                 child: Builder(
                   builder: (context) {
@@ -339,7 +354,15 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
     return historyDays;
   }
 
-  Future<List<material.Widget>> getLastWorkout(List<GymSet> sets) async {
+  void getStats(Future<List<GymSet>> sets) async {
+    final s = await sets;
+    final lw = await getLastWorkout(s);
+    setState(() {
+      lastWorkout = lw;
+    });
+  }
+
+  Future<material.Widget> getLastWorkout(List<GymSet> sets) async {
     DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
     String plural(int s) => s > 1 ? 's' : '';
     final today = dayOnly(DateTime.now());
@@ -375,72 +398,77 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
         totalWeight += set.weight;
       }
     }
-    return [
-      SizedBox(
-        height: 8,
-      ),
-      Selector<SettingsState, String>(
-        selector: (context, settings) {
-          final format = settings.value.shortDateFormat;
-          return DateFormat(format).format(sortedDays.first.day);
-        },
-        builder: (context, formattedDate, child) {
-          var daysSince =
-              DateTime.now().difference(sortedDays.first.day).inDays;
-          var lastWorkout =
-              'You last worked out ${daysSince == 0 ? 'today.' : daysSince == 1 ? 'yesterday.' : '$daysSince days ago on $formattedDate.'}';
-          return ListTile(
-            title: Text(lastWorkout),
-            subtitle: material.Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  height: 16,
-                ),
-                Text(
-                  'STATS',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.left,
-                ),
-                Divider(),
-                Text(
-                  '$totalExercises exercise${plural(totalExercises)} completed.',
-                  textAlign: TextAlign.left,
-                ),
-                Text(
-                  '$totalSets set${plural(totalSets)} completed.',
-                  textAlign: TextAlign.left,
-                ),
-                Text(
-                  '$totalReps rep${plural(totalReps)} completed.',
-                  textAlign: TextAlign.left,
-                ),
-                if (totalWeight > 0)
+    return Selector<SettingsState, String>(
+      selector: (context, settings) {
+        final format = settings.value.shortDateFormat;
+        return DateFormat(format).format(sortedDays.first.day);
+      },
+      builder: (context, formattedDate, child) {
+        var daysSince = DateTime.now().difference(sortedDays.first.day).inDays;
+        var lastWorkout =
+            'You last worked out ${daysSince == 0 ? 'today.' : daysSince == 1 ? 'yesterday.' : '$daysSince days ago on $formattedDate.'}';
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: 8),
+          child: Card(
+            child: ListTile(
+              title: Text(lastWorkout),
+              subtitle: material.Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: 16,
+                  ),
                   Text(
-                    '$totalWeight$weightUnit total lifted.',
+                    'STATS',
+                    style: TextStyle(fontWeight: FontWeight.bold),
                     textAlign: TextAlign.left,
                   ),
-                if (totalDistance > 0)
+                  Divider(),
                   Text(
-                    '$totalDistance$cardioUnit total travelled.',
+                    '$totalExercises exercise${plural(totalExercises)} completed',
                     textAlign: TextAlign.left,
                   ),
-                SizedBox(
-                  height: 16,
-                ),
-                Text('HISTORY'),
-                Divider(),
-              ],
+                  Text(
+                    '$totalSets set${plural(totalSets)} completed',
+                    textAlign: TextAlign.left,
+                  ),
+                  Text(
+                    '$totalReps rep${plural(totalReps)} completed',
+                    textAlign: TextAlign.left,
+                  ),
+                  if (totalWeight > 0)
+                    Text(
+                      '${totalWeight.toStringAsPrecision(3)}$weightUnit total lifted',
+                      textAlign: TextAlign.left,
+                    ),
+                  if (totalDistance > 0)
+                    Text(
+                      '$totalDistance$cardioUnit total travelled',
+                      textAlign: TextAlign.left,
+                    ),
+                  SizedBox(
+                    height: 16,
+                  ),
+                  //Text('HISTORY'),
+                ],
+              ),
             ),
-          );
-        },
-      ),
-    ];
+          ),
+        );
+      },
+    );
   }
 
   @override
   void initState() {
     super.initState();
+    scroll.addListener(() {
+      if (scroll.offset > 0.0) {
+        expand.collapse();
+      } else {
+        expand.expand();
+      }
+    });
     setStream();
   }
 
