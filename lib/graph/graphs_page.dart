@@ -252,7 +252,9 @@ class GraphsPageState extends State<GraphsPage>
                 selector: (p0, settingsState) =>
                     settingsState.value.showGlobalProgress,
                 builder: (context, showGlobal, child) => Expanded(
-                  child: graphList(gymSets, showGlobal),
+                  child: (sort == GraphSort.name)
+                      ? _sortedGraphList(gymSets, showGlobal)
+                      : _stickyHeadersGraphList(gymSets, showGlobal),
                 ),
               ),
             ],
@@ -325,7 +327,7 @@ class GraphsPageState extends State<GraphsPage>
     );
   }
 
-  material.ListView graphList(
+  material.ListView _stickyHeadersGraphList(
     List<GymSetsCompanion> gymSets,
     bool showGlobalProgress,
   ) {
@@ -367,40 +369,6 @@ class GraphsPageState extends State<GraphsPage>
           currentIdx--;
         }
         bool peek = showPeekGraph && currentIdx == 0;
-        // if (showPeekGraph && currentIdx == 1) {
-        //   return Consumer<SettingsState>(
-        //     builder: (
-        //       BuildContext context,
-        //       SettingsState settings,
-        //       Widget? child,
-        //     ) {
-        //       if (!settings.value.peekGraph) return const SizedBox();
-        //       if (_grouped.entries.firstOrNull == null) return const SizedBox();
-        //       return FutureBuilder(
-        //         builder: (context, snapshot) => snapshot.data != null
-        //             ? getPeek(
-        //                 _grouped.entries.first.value.first,
-        //                 snapshot.data!,
-        //                 settings.value.shortDateFormat,
-        //               )
-        //             : const SizedBox(),
-        //         future: _grouped.entries.first.value.first.cardio.value
-        //             ? getCardioData(
-        //                 name: _grouped.entries.first.value.first.name.value,
-        //               )
-        //             : getStrengthData(
-        //                 target: _grouped.entries.first.value.first.unit.value,
-        //                 name: _grouped.entries.first.value.first.name.value,
-        //                 metric: StrengthMetric.bestWeight,
-        //                 period: Period.day,
-        //                 start: null,
-        //                 end: null,
-        //                 limit: 20,
-        //               ),
-        //       );
-        //     },
-        //   );
-        // }
 
         if (index == itemCount - 1) return const SizedBox(height: 96);
 
@@ -523,6 +491,145 @@ class GraphsPageState extends State<GraphsPage>
     );
   }
 
+  material.ListView _sortedGraphList(
+    List<GymSetsCompanion> gymSets,
+    bool showGlobalProgress,
+  ) {
+    var itemCount = gymSets.length + 1;
+    final showGlobal = 'global graphs'.contains(search.toLowerCase()) &&
+        category == null &&
+        showGlobalProgress;
+    if (showGlobal) itemCount++;
+
+    final settings = context.read<SettingsState>().value;
+    final showPeekGraph = settings.peekGraph && gymSets.firstOrNull != null;
+    if (showPeekGraph) itemCount++;
+
+    return ListView.builder(
+      itemCount: itemCount,
+      controller: scroll,
+      padding: const EdgeInsets.only(bottom: 50, top: 8),
+      itemBuilder: (context, index) {
+        int currentIdx = index;
+
+        if (showGlobal) {
+          if (index == 0) {
+            return material.Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2),
+              child: ListTile(
+                leading: const Icon(Icons.language),
+                title: const Text("Global progress"),
+                subtitle: const Text("A chart grouped by category"),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const GlobalProgressPage(),
+                  ),
+                ),
+                onLongPress: longPressGlobal,
+              ),
+            );
+          }
+          currentIdx--;
+        }
+
+        if (showPeekGraph && currentIdx == 1) {
+          return Consumer<SettingsState>(
+            builder: (
+              BuildContext context,
+              SettingsState settings,
+              Widget? child,
+            ) {
+              if (!settings.value.peekGraph) return const SizedBox();
+              if (gymSets.firstOrNull == null) return const SizedBox();
+
+              return FutureBuilder(
+                builder: (context, snapshot) => snapshot.data != null
+                    ? getPeek(
+                        gymSets.first,
+                        snapshot.data!,
+                        settings.value.shortDateFormat,
+                      )
+                    : const SizedBox(),
+                future: gymSets.first.cardio.value
+                    ? getCardioData(name: gymSets.first.name.value)
+                    : getStrengthData(
+                        target: gymSets.first.unit.value,
+                        name: gymSets.first.name.value,
+                        metric: StrengthMetric.bestWeight,
+                        period: Period.day,
+                        start: null,
+                        end: null,
+                        limit: 20,
+                      ),
+              );
+            },
+          );
+        }
+
+        if (index == itemCount - 1) return const SizedBox(height: 96);
+
+        if (showPeekGraph && currentIdx > 1) {
+          currentIdx--;
+        }
+
+        final set = gymSets.elementAtOrNull(currentIdx);
+        if (set == null) return const SizedBox();
+
+        final previousItem = currentIdx > 0 ? gymSets[currentIdx - 1] : set;
+
+        final bool showDivider = sort != GraphSort.name &&
+            (currentIdx == 0 ||
+                !isSameDay(
+                  set.created.value.toLocal(),
+                  previousItem.created.value.toLocal(),
+                ));
+
+        return material.Column(
+          children: [
+            if (showDivider)
+              material.Row(
+                children: [
+                  const material.Expanded(child: Divider()),
+                  const Icon(Icons.today),
+                  const SizedBox(width: 4),
+                  Selector<SettingsState, String>(
+                    selector: (p0, p1) => p1.value.shortDateFormat,
+                    builder: (context, format, child) => Text(
+                      DateFormat(format).format(set.created.value.toLocal()),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const material.Expanded(child: Divider()),
+                ],
+              ),
+            GraphTile(
+              selected: selected,
+              gymSet: set,
+              onSelect: (name) async {
+                if (selected.contains(name))
+                  setState(() {
+                    selected.remove(name);
+                  });
+                else
+                  setState(() {
+                    selected.add(name);
+                  });
+                final result = await (db.gymSets.selectOnly()
+                      ..addColumns([db.gymSets.name.count()])
+                      ..where(db.gymSets.name.isIn(selected)))
+                    .getSingle();
+                setState(() {
+                  total = result.read(db.gymSets.name.count()) ?? 0;
+                });
+              },
+              tabCtrl: widget.tabController,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildSectionDivider(DateTime date) {
     final format = context.read<SettingsState>().value.shortDateFormat;
     return Padding(
@@ -562,7 +669,12 @@ class GraphsPageState extends State<GraphsPage>
     }
 
     // Optional: sort newest first
-    final sortedKeys = map.keys.toList()..sort((a, b) => b.compareTo(a));
+    final sortedKeys = map.keys.toList()
+      ..sort(
+        sort == GraphSort.dateDesc
+            ? (a, b) => b.compareTo(a)
+            : (a, b) => a.compareTo(b),
+      );
 
     return {
       for (final key in sortedKeys) key: map[key]!,
