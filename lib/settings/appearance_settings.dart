@@ -118,6 +118,32 @@ List<Widget> getAppearanceSettings(
           ),
         ),
       ),
+    if ('show stats panel'.contains(term.toLowerCase()))
+      Padding(
+        padding: const EdgeInsets.only(top: 8.0),
+        child: Tooltip(
+          message: 'Show stats panel above workout history',
+          child: ListTile(
+            title: const Text('Show stats panel'),
+            leading: settings.value.statsPanel
+                ? const Icon(Icons.analytics)
+                : const Icon(Icons.analytics_outlined),
+            onTap: () => db.settings.update().write(
+                  SettingsCompanion(
+                    statsPanel: Value(!settings.value.statsPanel),
+                  ),
+                ),
+            trailing: Switch(
+              value: settings.value.statsPanel,
+              onChanged: (value) => db.settings.update().write(
+                    SettingsCompanion(
+                      statsPanel: Value(value),
+                    ),
+                  ),
+            ),
+          ),
+        ),
+      ),
     if ('peek graph'.contains(term.toLowerCase()))
       Tooltip(
         message: 'Show the first line graph on graphs page',

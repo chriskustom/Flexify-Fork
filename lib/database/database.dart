@@ -439,10 +439,13 @@ class AppDatabase extends _$AppDatabase {
             WHERE strength_unit = 'kg'
           ''');
         },
+        from47To48: (Migrator m, Schema48 schema) async {
+          await m.addColumn(schema.settings, schema.settings.statsPanel);
+        },
       ),
     );
   }
 
   @override
-  int get schemaVersion => 47;
+  int get schemaVersion => 48;
 }
