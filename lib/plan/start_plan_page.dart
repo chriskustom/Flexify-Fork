@@ -74,6 +74,7 @@ class _StartPlanPageState extends State<StartPlanPage>
             actions: [
               if (currentExercise != null) ...[
                 IconButton(
+                  tooltip: 'History',
                   onPressed: () async {
                     final gymSets = await (db.gymSets.select()
                           ..orderBy(
@@ -116,7 +117,6 @@ class _StartPlanPageState extends State<StartPlanPage>
                     });
                   },
                   icon: const Icon(Icons.history),
-                  tooltip: "History",
                 ),
               ],
               IconButton(

@@ -84,7 +84,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
 
   final expand = ExpansibleController();
 
-  Widget? lastWorkout;
+  Widget lastWorkout = SizedBox.shrink();
   Set<int> selected = {};
   String search = '';
   int limit = 100;
@@ -200,7 +200,9 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                 ),
               if (snapshot.hasError)
                 Expanded(child: ErrorWidget(snapshot.error.toString())),
-              if (snapshot.hasData && showStats) ...[
+              if (snapshot.hasData &&
+                  snapshot.data?.isNotEmpty == true &&
+                  showStats) ...[
                 Theme(
                   data: Theme.of(context)
                       .copyWith(dividerColor: Colors.transparent),
@@ -215,7 +217,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                     title: Text(expand.isExpanded ? 'Stats' : 'History'),
                     initiallyExpanded: true,
                     controller: expand,
-                    children: [lastWorkout!],
+                    children: [lastWorkout],
                   ),
                 ),
               ],
@@ -354,18 +356,20 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
   }
 
   void getStats(Future<List<GymSet>> sets) async {
-    final s = await sets;
-    final lw = await getLastWorkout(s);
-    setState(() {
-      lastWorkout = lw;
-    });
+    try {
+      final s = await sets;
+      final lw = await getLastWorkout(s);
+      setState(() {
+        lastWorkout = lw;
+      });
+    } catch (_) {}
   }
 
   Future<material.Widget> getLastWorkout(List<GymSet> sets) async {
     DateTime dayOnly(DateTime d) => DateTime(d.year, d.month, d.day);
     String plural(int s) => s > 1 ? 's' : '';
     final today = dayOnly(DateTime.now());
-
+    if (sets.isEmpty) return SizedBox.shrink();
     final mostRecentDay = sets
         .map((s) => dayOnly(s.created))
         .where((d) => !d.isAfter(today))
