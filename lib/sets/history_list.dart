@@ -15,6 +15,7 @@ class HistoryList extends StatefulWidget {
   final Function(int) onSelect;
   final Set<int> selected;
   final Function onNext;
+  final bool? peek;
 
   const HistoryList({
     super.key,
@@ -23,6 +24,7 @@ class HistoryList extends StatefulWidget {
     required this.selected,
     required this.onNext,
     required this.scroll,
+    this.peek = false,
   });
 
   @override
@@ -33,12 +35,13 @@ class _HistoryListState extends State<HistoryList> {
   bool goingNext = false;
   final GlobalKey<AnimatedListState> _key = GlobalKey<AnimatedListState>();
   List<GymSet> _current = [];
-
+  bool _peek = false;
   @override
   void initState() {
     super.initState();
     widget.scroll.addListener(scrollListener);
     _current = List.from(widget.sets);
+    _peek = widget.peek ?? false;
   }
 
   @override
@@ -111,9 +114,12 @@ class _HistoryListState extends State<HistoryList> {
     );
   }
 
+  int setNum = 1;
   Widget _buildListItem(GymSet gymSet, int index, bool showImages) {
     final previousGymSet = index > 0 ? _current[index - 1] : gymSet;
-    final bool showDivider = index == 0 || !isSameDay(gymSet.created.toLocal(), previousGymSet.created.toLocal());
+    final bool showDivider = index == 0 ||
+        !isSameDay(gymSet.created.toLocal(), previousGymSet.created.toLocal());
+    setNum = showDivider ? 1 : setNum + 1;
 
     final minutes = gymSet.duration.floor();
     final seconds =
@@ -218,38 +224,60 @@ class _HistoryListState extends State<HistoryList> {
               width: 1,
             ),
           ),
-          child: ListTile(
-            leading: leading,
-            title: Text(gymSet.name),
-            subtitle: Selector<SettingsState, String>(
-              selector: (context, settings) => settings.value.longDateFormat,
-              builder: (context, dateFormat, child) => Text(
-                dateFormat == 'timeago'
-                    ? timeago.format(gymSet.created)
-                    : DateFormat(dateFormat).format(gymSet.created),
-              ),
-            ),
-            trailing: Text(
-              trailing,
-              style: const TextStyle(fontSize: 16),
-            ),
-            onLongPress: () => widget.onSelect(gymSet.id),
-            onTap: () {
-              if (widget.selected.isNotEmpty) {
-                widget.onSelect(gymSet.id);
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditSetPage(gymSet: gymSet),
-                  ),
-                );
-              }
-            },
-          ),
+          child: _getListItem(leading, gymSet, trailing),
         ),
       ],
     );
+  }
+
+  Widget _getListItem(Widget leading, GymSet gymSet, String trailing) {
+    final title = Text(_peek ? _getSetNumber(gymSet) : gymSet.name);
+    final subtitle = Selector<SettingsState, String>(
+      selector: (context, settings) => settings.value.longDateFormat,
+      builder: (context, dateFormat, child) => Text(
+        dateFormat == 'timeago'
+            ? timeago.format(gymSet.created)
+            : DateFormat(dateFormat).format(gymSet.created),
+      ),
+    );
+    return ListTile(
+      leading: leading,
+      title: title,
+      subtitle: _peek ? null : subtitle,
+      trailing: Text(
+        trailing,
+        style: const TextStyle(fontSize: 16),
+      ),
+      onLongPress: () => widget.onSelect(gymSet.id),
+      onTap: () {
+        if (widget.selected.isNotEmpty) {
+          widget.onSelect(gymSet.id);
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => EditSetPage(gymSet: gymSet),
+            ),
+          );
+        }
+      },
+    );
+  }
+
+  String _getSetNumber(GymSet gymSet) {
+    final currentDate = gymSet.created.toLocal();
+    final sameDayEntries = _current
+        .where(
+          (entry) =>
+              entry.created.toLocal().year == currentDate.year &&
+              entry.created.toLocal().month == currentDate.month &&
+              entry.created.toLocal().day == currentDate.day,
+        )
+        .toList()
+        .reversed
+        .toList();
+    final positionOnThisDay = sameDayEntries.indexOf(gymSet) + 1;
+    return 'Set #$positionOnThisDay';
   }
 
   @override

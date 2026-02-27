@@ -9,11 +9,13 @@ import 'package:provider/provider.dart';
 class GraphHistoryPage extends StatefulWidget {
   final String name;
   final List<GymSet> gymSets;
+  final bool? peek;
 
   const GraphHistoryPage({
     super.key,
     required this.name,
     required this.gymSets,
+    this.peek = false,
   });
 
   @override
@@ -52,6 +54,7 @@ class _GraphHistoryPageState extends State<GraphHistoryPage> {
               });
               setSets();
             },
+            peek: widget.peek,
           );
         },
       ),

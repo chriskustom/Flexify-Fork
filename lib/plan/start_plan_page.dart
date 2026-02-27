@@ -74,6 +74,7 @@ class _StartPlanPageState extends State<StartPlanPage>
             actions: [
               if (currentExercise != null) ...[
                 IconButton(
+                  tooltip: 'Last 10 entries',
                   onPressed: () async {
                     final gymSets = await (db.gymSets.select()
                           ..orderBy(
@@ -108,6 +109,7 @@ class _StartPlanPageState extends State<StartPlanPage>
                               child: GraphHistoryPage(
                                 name: currentExercise!,
                                 gymSets: gymSets,
+                                peek: true,
                               ),
                             ),
                           );
@@ -116,7 +118,6 @@ class _StartPlanPageState extends State<StartPlanPage>
                     });
                   },
                   icon: const Icon(Icons.history),
-                  tooltip: "History",
                 ),
               ],
               IconButton(
