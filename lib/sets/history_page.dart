@@ -99,7 +99,10 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
       body: StreamBuilder(
         stream: stream,
         builder: (context, snapshot) {
-          getStats(stream.first);
+          final showStats = context.select<SettingsState, bool>(
+            (settings) => settings.value.statsPanel,
+          );
+          if (showStats) getStats(stream.first);
           return material.Column(
             children: [
               AppSearch(
@@ -197,7 +200,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                 ),
               if (snapshot.hasError)
                 Expanded(child: ErrorWidget(snapshot.error.toString())),
-              if (snapshot.hasData) ...[
+              if (snapshot.hasData && showStats) ...[
                 Theme(
                   data: Theme.of(context)
                       .copyWith(dividerColor: Colors.transparent),

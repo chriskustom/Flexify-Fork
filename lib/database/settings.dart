@@ -43,4 +43,5 @@ class Settings extends Table {
   IntColumn get warmupSets => integer().nullable()();
   BoolColumn get scrollableTabs =>
       boolean().withDefault(const Constant(true))();
+  BoolColumn get statsPanel => boolean().withDefault(const Constant(true))();
 }

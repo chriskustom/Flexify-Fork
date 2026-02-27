@@ -1,6 +1,6 @@
 # Flexify-Fork
 
-A simple fork of [Flexify](https://github.com/brandonp2412/Flexify)
+A simple fork of [Flexify](https://github.com/brandonp2412/Flexify) with some QOL updates
 
 ## Changes
 
