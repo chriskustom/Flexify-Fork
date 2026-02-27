@@ -74,7 +74,7 @@ class _StartPlanPageState extends State<StartPlanPage>
             actions: [
               if (currentExercise != null) ...[
                 IconButton(
-                  tooltip: 'Last 10 entries',
+                  tooltip: 'History',
                   onPressed: () async {
                     final gymSets = await (db.gymSets.select()
                           ..orderBy(
