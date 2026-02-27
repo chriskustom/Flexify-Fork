@@ -126,7 +126,8 @@ class GraphsPageState extends State<GraphsPage>
     return material.SizedBox(
       height: MediaQuery.of(context).size.height * 0.15,
       child: material.Padding(
-        padding: const EdgeInsets.only(right: 48.0, top: 16.0, left: 48.0),
+        padding:
+            const EdgeInsets.only(right: 48.0, top: 8.0, left: 48, bottom: 8),
         child: FlexLine(
           data: data,
           spots: spots,
@@ -393,17 +394,37 @@ class GraphsPageState extends State<GraphsPage>
             children: List.generate(
               sets.length,
               (index) {
-                if (peek && index == 1)
-                  return material.Column(
-                    children: [
+                return material.Column(
+                  children: [
+                    GraphTile(
+                      selected: selected,
+                      gymSet: set.value[index],
+                      onSelect: (name) async {
+                        if (selected.contains(name))
+                          setState(() {
+                            selected.remove(name);
+                          });
+                        else
+                          setState(() {
+                            selected.add(name);
+                          });
+                        final result = await (db.gymSets.selectOnly()
+                              ..addColumns([db.gymSets.name.count()])
+                              ..where(db.gymSets.name.isIn(selected)))
+                            .getSingle();
+                        setState(() {
+                          total = result.read(db.gymSets.name.count()) ?? 0;
+                        });
+                      },
+                      tabCtrl: widget.tabController,
+                    ),
+                    if (peek && index == 0) ...[
                       Consumer<SettingsState>(
                         builder: (
                           BuildContext context,
                           SettingsState settings,
                           Widget? child,
                         ) {
-                          if (!settings.value.peekGraph)
-                            return const SizedBox();
                           if (_grouped.entries.firstOrNull == null)
                             return const SizedBox();
 
@@ -436,53 +457,32 @@ class GraphsPageState extends State<GraphsPage>
                           );
                         },
                       ),
-                      GraphTile(
-                        selected: selected,
-                        gymSet: set.value[index],
-                        onSelect: (name) async {
-                          if (selected.contains(name))
-                            setState(() {
-                              selected.remove(name);
-                            });
-                          else
-                            setState(() {
-                              selected.add(name);
-                            });
-                          final result = await (db.gymSets.selectOnly()
-                                ..addColumns([db.gymSets.name.count()])
-                                ..where(db.gymSets.name.isIn(selected)))
-                              .getSingle();
-                          setState(() {
-                            total = result.read(db.gymSets.name.count()) ?? 0;
-                          });
-                        },
-                        tabCtrl: widget.tabController,
-                      ),
                     ],
-                  );
-
-                return GraphTile(
-                  selected: selected,
-                  gymSet: set.value[index],
-                  onSelect: (name) async {
-                    if (selected.contains(name))
-                      setState(() {
-                        selected.remove(name);
-                      });
-                    else
-                      setState(() {
-                        selected.add(name);
-                      });
-                    final result = await (db.gymSets.selectOnly()
-                          ..addColumns([db.gymSets.name.count()])
-                          ..where(db.gymSets.name.isIn(selected)))
-                        .getSingle();
-                    setState(() {
-                      total = result.read(db.gymSets.name.count()) ?? 0;
-                    });
-                  },
-                  tabCtrl: widget.tabController,
+                  ],
                 );
+
+                // return GraphTile(
+                //   selected: selected,
+                //   gymSet: set.value[index],
+                //   onSelect: (name) async {
+                //     if (selected.contains(name))
+                //       setState(() {
+                //         selected.remove(name);
+                //       });
+                //     else
+                //       setState(() {
+                //         selected.add(name);
+                //       });
+                //     final result = await (db.gymSets.selectOnly()
+                //           ..addColumns([db.gymSets.name.count()])
+                //           ..where(db.gymSets.name.isIn(selected)))
+                //         .getSingle();
+                //     setState(() {
+                //       total = result.read(db.gymSets.name.count()) ?? 0;
+                //     });
+                //   },
+                //   tabCtrl: widget.tabController,
+                // );
               },
             ),
           ),
