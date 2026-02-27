@@ -113,6 +113,7 @@ void main() {
         planTrailing: 'PlanTrailing.reorder',
         repEstimation: true,
         scrollableTabs: false,
+        statsPanel: true,
       ),
     );
 
@@ -212,6 +213,7 @@ void main() {
         planTrailing: 'PlanTrailing.reorder',
         repEstimation: true,
         scrollableTabs: false,
+        statsPanel: true,
       ),
     );
 
