@@ -6,9 +6,9 @@ A simple fork of [Flexify](https://github.com/brandonp2412/Flexify) with some QO
 
 - **History**:
     - Dates are fixed above recent workout rather than below.
-    - Quick access history from Plan page when working out
+    - Quick access history peek from Plan page when working out
     - Sticky Date headers on dated lists
-    - Previous workout stats panel on history page. 
+    - Previous workout stats panel on history page. (toggle in settings) 
   
 ## License
 
