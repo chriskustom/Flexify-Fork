@@ -398,7 +398,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
       for (var set in exercise.gymSets) {
         totalReps += set.reps.toInt();
         totalDistance += set.distance;
-        totalWeight += set.weight;
+        totalWeight += (set.weight * set.reps);
       }
     }
     return Selector<SettingsState, String>(
