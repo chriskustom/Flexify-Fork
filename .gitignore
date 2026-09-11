@@ -54,3 +54,6 @@ chromedriver.zip
 chromedriver-win64/
 
 coverage/
+
+# install
+install.txt
