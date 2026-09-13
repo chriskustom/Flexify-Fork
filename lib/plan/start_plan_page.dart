@@ -193,6 +193,9 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
           },
         ),
       ),
+      SizedBox(
+        width: 8,
+      ),
       Expanded(
         child: TextFormField(
           controller: weight,
