@@ -38,10 +38,8 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
   Map<DateTime, List<HistoryDay>> _grouped = {};
   @override
   Widget build(BuildContext context) {
-    final showImages = context
-        .select<SettingsState, bool>((settings) => settings.value.showImages);
-    final sortedDays = List<HistoryDay>.from(widget.days)
-      ..sort((a, b) => b.day.compareTo(a.day));
+    final showImages = context.select<SettingsState, bool>((settings) => settings.value.showImages);
+    final sortedDays = List<HistoryDay>.from(widget.days)..sort((a, b) => b.day.compareTo(a.day));
     _grouped = _groupByDay(sortedDays);
 
     return ListView.builder(
@@ -56,7 +54,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
         return StickyHeader(
           header: Container(
             color: Theme.of(context).scaffoldBackgroundColor,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             alignment: Alignment.center,
             child: _buildSectionDivider(
               date,
@@ -102,8 +100,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
         );
       },
       onLongPressStart: (details) {
-        final overlay =
-            Overlay.of(context).context.findRenderObject() as RenderBox;
+        final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
         showMenu(
           context: context,
           position: RelativeRect.fromRect(
@@ -178,8 +175,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
   ) {
     return GestureDetector(
       onLongPressStart: (details) {
-        final overlay =
-            Overlay.of(context).context.findRenderObject() as RenderBox;
+        final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
         showMenu(
           context: context,
           position: RelativeRect.fromRect(
@@ -228,21 +224,18 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
         );
       },
       child: ExpansionTile(
+        childrenPadding: EdgeInsets.all(0),
         title: Text("${history.name} (${history.gymSets.length})"),
         shape: const Border.symmetric(),
         children: history.gymSets.map(
           (gymSet) {
             final minutes = gymSet.duration.floor();
-            final seconds = ((gymSet.duration * 60) % 60)
-                .floor()
-                .toString()
-                .padLeft(2, '0');
+            final seconds = ((gymSet.duration * 60) % 60).floor().toString().padLeft(2, '0');
             final distance = toString(gymSet.distance);
             final reps = toString(gymSet.reps);
             final weight = toString(gymSet.weight);
             String incline = '';
-            if (gymSet.incline != null && gymSet.incline! > 0)
-              incline = '@ ${gymSet.incline}%';
+            if (gymSet.incline != null && gymSet.incline! > 0) incline = '@ ${gymSet.incline}%';
 
             Widget? leading = SizedBox(
               height: 24,
@@ -260,8 +253,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
                 onTap: () => widget.onSelect(gymSet.id),
                 child: Image.file(
                   File(gymSet.image!),
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.error),
+                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.error),
                 ),
               );
             } else if (widget.selected.isEmpty) {
@@ -276,9 +268,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
                   ),
                   child: Center(
                     child: Text(
-                      gymSet.name.isNotEmpty
-                          ? gymSet.name[0].toUpperCase()
-                          : '?',
+                      gymSet.name.isNotEmpty ? gymSet.name[0].toUpperCase() : '?',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -300,19 +290,21 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
             );
 
             return ListTile(
+              dense: true,
+              visualDensity: VisualDensity.comfortable,
               leading: leading,
               title: Text(
                 gymSet.cardio
-                    ? "$distance ${gymSet.unit} / $minutes:$seconds $incline"
-                    : "$reps x $weight ${gymSet.unit}",
+                    ? "${_getSetNumber(gymSet, history.gymSets)}: $distance ${gymSet.unit} / $minutes:$seconds $incline"
+                    : "${_getSetNumber(gymSet, history.gymSets)}: $reps REPS @ $weight ${gymSet.unit}",
               ),
               selected: widget.selected.contains(gymSet.id),
-              subtitle: Selector<SettingsState, String>(
-                selector: (context, settings) => settings.value.longDateFormat,
+              trailing: Selector<SettingsState, String>(
+                selector: (context, settings) => settings.value.shortDateFormat,
                 builder: (context, dateFormat, child) => Text(
                   dateFormat == 'timeago'
                       ? timeago.format(gymSet.created)
-                      : DateFormat(dateFormat).format(gymSet.created),
+                      : DateFormat("HH:mm a").format(gymSet.created),
                 ),
               ),
               onLongPress: () {
@@ -334,6 +326,22 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
         ).toList(),
       ),
     );
+  }
+
+  String _getSetNumber(GymSet gymSet, List<GymSet> today) {
+    final currentDate = gymSet.created.toLocal();
+    final sameDayEntries = today
+        .where(
+          (entry) =>
+              entry.created.toLocal().year == currentDate.year &&
+              entry.created.toLocal().month == currentDate.month &&
+              entry.created.toLocal().day == currentDate.day,
+        )
+        .toList()
+        .reversed
+        .toList();
+    final positionOnThisDay = sameDayEntries.indexOf(gymSet) + 1;
+    return 'Set $positionOnThisDay';
   }
 
   Map<DateTime, List<HistoryDay>> _groupByDay(List<HistoryDay> days) {
@@ -358,8 +366,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
 
     var sortedDays = sets;
     sortedDays.sort((a, b) => a.day.compareTo(b.day));
-    var totalWorkout =
-        sortedDays.where((d) => d.day == sortedDays.first.day).toList();
+    var totalWorkout = sortedDays.where((d) => d.day == sortedDays.first.day).toList();
 
     var cardioUnit = totalWorkout.first.gymSets.any((n) => n.cardio)
         ? totalWorkout.first.gymSets.firstWhere((n) => n.cardio).unit
@@ -403,8 +410,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
                 Text(
                   '${num.parse(totalWeight.toStringAsFixed(3))}$weightUnit total lifted',
                 ),
-              if (totalDistance > 0)
-                Text('$totalDistance$cardioUnit total travelled'),
+              if (totalDistance > 0) Text('$totalDistance$cardioUnit total travelled'),
             ],
           ),
         );
@@ -416,8 +422,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
     List<HistoryDay> historyDays = [];
     for (final gymSet in gymSets) {
       final day = DateUtils.dateOnly(gymSet.created);
-      final index = historyDays
-          .indexWhere((hd) => isSameDay(hd.day, day) && hd.name == gymSet.name);
+      final index = historyDays.indexWhere((hd) => isSameDay(hd.day, day) && hd.name == gymSet.name);
       if (index == -1)
         historyDays.add(
           HistoryDay(name: gymSet.name, gymSets: [gymSet], day: day),
@@ -537,9 +542,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
   }
 
   void scrollListener() {
-    if (widget.scroll.position.pixels <
-            widget.scroll.position.maxScrollExtent - 200 ||
-        goingNext) return;
+    if (widget.scroll.position.pixels < widget.scroll.position.maxScrollExtent - 200 || goingNext) return;
     setState(() {
       goingNext = true;
     });

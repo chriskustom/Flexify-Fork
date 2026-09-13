@@ -29,8 +29,7 @@ class StartPlanPage extends StatefulWidget {
   createState() => _StartPlanPageState();
 }
 
-class _StartPlanPageState extends State<StartPlanPage>
-    with WidgetsBindingObserver {
+class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserver {
   final reps = TextEditingController(text: "0.0");
   final weight = TextEditingController(text: "0.0");
   final notes = TextEditingController(text: "");
@@ -89,6 +88,7 @@ class _StartPlanPageState extends State<StartPlanPage>
                           ..where((tbl) => tbl.hidden.equals(false))
                           ..limit(20))
                         .get();
+                    gymSets.sort((a, b) => b.created.compareTo(a.created));
                     if (!context.mounted) return;
                     setState(() {
                       showModalBottomSheet(
@@ -122,16 +122,13 @@ class _StartPlanPageState extends State<StartPlanPage>
               ],
               IconButton(
                 onPressed: () async {
-                  final plan = await (db.plans.select()
-                        ..whereSamePrimaryKey(widget.plan))
-                      .getSingle();
+                  final plan = await (db.plans.select()..whereSamePrimaryKey(widget.plan)).getSingle();
                   await planState.setExercises(plan.toCompanion(false));
                   if (!context.mounted) return;
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) =>
-                          EditPlanPage(plan: plan.toCompanion(false)),
+                      builder: (context) => EditPlanPage(plan: plan.toCompanion(false)),
                     ),
                   );
                 },
@@ -145,7 +142,12 @@ class _StartPlanPageState extends State<StartPlanPage>
               key: key,
               child: material.Column(
                 children: [
-                  if (!cardio) ...strengthFields(snapshot),
+                  if (!cardio)
+                    Row(
+                      children: [
+                        ...strengthFields(snapshot),
+                      ],
+                    ),
                   if (cardio) ...cardioFields(snapshot),
                   unitSelector(),
                   notesField(),
@@ -176,43 +178,47 @@ class _StartPlanPageState extends State<StartPlanPage>
 
   List<Widget> strengthFields(AsyncSnapshot<List<PlanExercise>> snapshot) {
     return [
-      TextFormField(
-        controller: reps,
-        decoration: const InputDecoration(labelText: 'Reps'),
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        textInputAction: TextInputAction.next,
-        onFieldSubmitted: (value) => selectAll(weight),
-        onTap: () => selectAll(reps),
-        validator: (value) {
-          if (value == null || value.isEmpty) return 'Required';
-          if (double.tryParse(value) == null) return 'Invalid number';
-          return null;
-        },
+      Expanded(
+        child: TextFormField(
+          controller: reps,
+          decoration: const InputDecoration(labelText: 'Reps'),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          textInputAction: TextInputAction.next,
+          onFieldSubmitted: (value) => selectAll(weight),
+          onTap: () => selectAll(reps),
+          validator: (value) {
+            if (value == null || value.isEmpty) return 'Required';
+            if (double.tryParse(value) == null) return 'Invalid number';
+            return null;
+          },
+        ),
       ),
-      TextFormField(
-        controller: weight,
-        decoration: InputDecoration(
-          labelText: 'Weight ($unit)',
-          suffixIcon: Selector<SettingsState, bool>(
-            selector: (context, settings) => settings.value.showBodyWeight,
-            builder: (context, showBodyWeight, child) => Visibility(
-              visible: showBodyWeight,
-              child: IconButton(
-                tooltip: "Use body weight",
-                icon: const Icon(Icons.scale),
-                onPressed: useBodyWeight,
+      Expanded(
+        child: TextFormField(
+          controller: weight,
+          decoration: InputDecoration(
+            labelText: 'Weight ($unit)',
+            suffixIcon: Selector<SettingsState, bool>(
+              selector: (context, settings) => settings.value.showBodyWeight,
+              builder: (context, showBodyWeight, child) => Visibility(
+                visible: showBodyWeight,
+                child: IconButton(
+                  tooltip: "Use body weight",
+                  icon: const Icon(Icons.scale),
+                  onPressed: useBodyWeight,
+                ),
               ),
             ),
           ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          onTap: () => selectAll(weight),
+          onFieldSubmitted: (value) async => await save(snapshot),
+          validator: (value) {
+            if (value == null || value.isEmpty) return 'Required';
+            if (double.tryParse(value) == null) return 'Invalid number';
+            return null;
+          },
         ),
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        onTap: () => selectAll(weight),
-        onFieldSubmitted: (value) async => await save(snapshot),
-        validator: (value) {
-          if (value == null || value.isEmpty) return 'Required';
-          if (double.tryParse(value) == null) return 'Invalid number';
-          return null;
-        },
       ),
     ];
   }
@@ -225,14 +231,12 @@ class _StartPlanPageState extends State<StartPlanPage>
             child: TextFormField(
               controller: minutes,
               decoration: const InputDecoration(labelText: 'Minutes'),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: false),
+              keyboardType: const TextInputType.numberWithOptions(decimal: false),
               onTap: () => selectAll(minutes),
               textInputAction: TextInputAction.next,
               onFieldSubmitted: (value) => selectAll(seconds),
               validator: (value) {
-                if (value?.isNotEmpty == true && int.tryParse(value!) == null)
-                  return 'Invalid number';
+                if (value?.isNotEmpty == true && int.tryParse(value!) == null) return 'Invalid number';
                 return null;
               },
             ),
@@ -242,14 +246,12 @@ class _StartPlanPageState extends State<StartPlanPage>
             child: TextFormField(
               controller: seconds,
               decoration: const InputDecoration(labelText: 'Seconds'),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: false),
+              keyboardType: const TextInputType.numberWithOptions(decimal: false),
               onTap: () => selectAll(seconds),
               textInputAction: TextInputAction.next,
               onFieldSubmitted: (value) => selectAll(distance),
               validator: (value) {
-                if (value?.isNotEmpty == true && int.tryParse(value!) == null)
-                  return 'Invalid number';
+                if (value?.isNotEmpty == true && int.tryParse(value!) == null) return 'Invalid number';
                 return null;
               },
             ),
@@ -265,8 +267,7 @@ class _StartPlanPageState extends State<StartPlanPage>
                 decoration: InputDecoration(
                   labelText: 'Weight ($unit)',
                   suffixIcon: Selector<SettingsState, bool>(
-                    selector: (context, settings) =>
-                        settings.value.showBodyWeight,
+                    selector: (context, settings) => settings.value.showBodyWeight,
                     builder: (context, showBodyWeight, child) => Visibility(
                       visible: showBodyWeight,
                       child: IconButton(
@@ -277,8 +278,7 @@ class _StartPlanPageState extends State<StartPlanPage>
                     ),
                   ),
                 ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onTap: () => selectAll(weight),
                 onFieldSubmitted: (value) async => await save(snapshot),
                 validator: (value) {
@@ -294,8 +294,7 @@ class _StartPlanPageState extends State<StartPlanPage>
                 textInputAction: TextInputAction.next,
                 controller: distance,
                 decoration: const InputDecoration(labelText: 'Distance'),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onFieldSubmitted: (value) => selectAll(incline),
                 onTap: () => selectAll(distance),
                 validator: (value) {
@@ -310,8 +309,7 @@ class _StartPlanPageState extends State<StartPlanPage>
             child: TextFormField(
               controller: incline,
               decoration: const InputDecoration(labelText: 'Incline %'),
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               onTap: () => selectAll(incline),
               onFieldSubmitted: (value) => save(snapshot),
               validator: (value) {
@@ -407,17 +405,11 @@ class _StartPlanPageState extends State<StartPlanPage>
     } else if (!cardio && settings.repEstimation) {
       final parsedWeight = double.parse(weight.text);
       stream.first.then((planExercises) {
-        final closestRpm = rpms!
-            .where((rpm) => rpm.name == planExercises[selected].exercise)
-            .reduce(
-              (rpm1, rpm2) => (rpm1.weight - parsedWeight).abs() <
-                      (rpm2.weight - parsedWeight).abs()
-                  ? rpm1
-                  : rpm2,
+        final closestRpm = rpms!.where((rpm) => rpm.name == planExercises[selected].exercise).reduce(
+              (rpm1, rpm2) => (rpm1.weight - parsedWeight).abs() < (rpm2.weight - parsedWeight).abs() ? rpm1 : rpm2,
             );
 
-        final estimatedReps =
-            (difference.inMinutes * closestRpm.rpm).clamp(1, 50);
+        final estimatedReps = (difference.inMinutes * closestRpm.rpm).clamp(1, 50);
         if (estimatedReps <= 0) return;
 
         reps.text = estimatedReps.toInt().toString();
@@ -461,9 +453,7 @@ class _StartPlanPageState extends State<StartPlanPage>
     WidgetsBinding.instance.addObserver(this);
 
     planState = context.read<PlanState>();
-    title = widget.plan.title?.isNotEmpty == true
-        ? widget.plan.title!
-        : widget.plan.days.replaceAll(",", ", ");
+    title = widget.plan.title?.isNotEmpty == true ? widget.plan.title! : widget.plan.days.replaceAll(",", ", ");
 
     _loadExercises();
   }
@@ -501,8 +491,7 @@ class _StartPlanPageState extends State<StartPlanPage>
 
   void _updateGymSetTextFields(GymSet gymSet) {
     final settings = context.read<SettingsState>().value;
-    if (settings.strengthUnit == 'last-entry' && !gymSet.cardio ||
-        settings.cardioUnit == 'last-entry' && gymSet.cardio)
+    if (settings.strengthUnit == 'last-entry' && !gymSet.cardio || settings.cardioUnit == 'last-entry' && gymSet.cardio)
       unit = gymSet.unit;
     else if (gymSet.cardio)
       unit = settings.cardioUnit;
@@ -523,8 +512,7 @@ class _StartPlanPageState extends State<StartPlanPage>
   }
 
   void planChanged() {
-    final index =
-        planState.plans.indexWhere((plan) => plan.id == widget.plan.id);
+    final index = planState.plans.indexWhere((plan) => plan.id == widget.plan.id);
     if (index == -1) return Navigator.pop(context);
 
     final plan = planState.plans[index];
@@ -551,10 +539,7 @@ class _StartPlanPageState extends State<StartPlanPage>
       bodyWeight = lastSet?.bodyWeight;
     }
 
-    if (!settings.explainedPermissions &&
-        settings.restTimers &&
-        !kIsWeb &&
-        mounted) {
+    if (!settings.explainedPermissions && settings.restTimers && !kIsWeb && mounted) {
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -584,8 +569,7 @@ class _StartPlanPageState extends State<StartPlanPage>
       created: DateTime.now().toLocal(),
       cardio: Value(cardio),
       duration: Value(
-        (int.tryParse(seconds.text) ?? 0) / 60 +
-            (int.tryParse(minutes.text) ?? 0),
+        (int.tryParse(seconds.text) ?? 0) / 60 + (int.tryParse(minutes.text) ?? 0),
       ),
       bodyWeight: Value.absentIfNull(bodyWeight),
       restMs: Value(restMs?.toInt()),
@@ -603,8 +587,7 @@ class _StartPlanPageState extends State<StartPlanPage>
     if (index != -1) count = counts[index].count;
     count++;
 
-    final finishedPlan = count == (max ?? settings.maxSets) &&
-        selected == snapshot.data!.length - 1;
+    final finishedPlan = count == (max ?? settings.maxSets) && selected == snapshot.data!.length - 1;
     final isWarmup = count <= (warmupSets ?? settings.warmupSets ?? 0);
     restMs ??= settings.timerDuration.toDouble();
 
@@ -618,16 +601,14 @@ class _StartPlanPageState extends State<StartPlanPage>
       );
     }
 
-    final finishedExercise = count == (max ?? settings.maxSets) &&
-        selected < snapshot.data!.length - 1;
+    final finishedExercise = count == (max ?? settings.maxSets) && selected < snapshot.data!.length - 1;
 
     var gymSet = await db.into(db.gymSets).insertReturning(gymSetInsert);
     await planState.updateGymCounts(widget.plan.id);
     await planState.updateDefaults();
     if (settings.planTrailing == 'PlanTrailing.count' ||
         settings.planTrailing == 'PlanTrailing.ratio' ||
-        settings.planTrailing == 'PlanTrailing.percent')
-      planState.updatePlanCounts();
+        settings.planTrailing == 'PlanTrailing.percent') planState.updatePlanCounts();
     if (!mounted) return;
     setState(() {
       _updateGymSetTextFields(gymSet);
@@ -640,8 +621,7 @@ class _StartPlanPageState extends State<StartPlanPage>
     final best = await isBest(gymSet);
     if (!best) return;
     final random = Random();
-    final randomMessage =
-        positiveReinforcement[random.nextInt(positiveReinforcement.length)];
+    final randomMessage = positiveReinforcement[random.nextInt(positiveReinforcement.length)];
     if (mounted && random.nextDouble() < 0.3) toast(randomMessage);
   }
 
