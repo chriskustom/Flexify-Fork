@@ -53,6 +53,7 @@ class _EditSetPageState extends State<EditSetPage> {
   late String unit;
   late bool cardio;
   late String name;
+  late bool dateSet = false;
 
   void onSelected(String option, bool showBodyWeight) async {
     final last = await (db.gymSets.select()
@@ -189,7 +190,7 @@ class _EditSetPageState extends State<EditSetPage> {
                   notesField(),
                   const SizedBox(height: 8.0),
                 ],
-                dateSelector(),
+                dateSelector(name),
                 if (showImages) ...[
                   const SizedBox(height: 8.0),
                   imageField(),
@@ -211,7 +212,9 @@ class _EditSetPageState extends State<EditSetPage> {
                         return SizedBox(
                           height: 200,
                           child: Center(
-                            child: Text('Error loading history: ${snapshot.error}'),
+                            child: Text(
+                              'Error loading history: ${snapshot.error}',
+                            ),
                           ),
                         );
                       }
@@ -324,7 +327,8 @@ class _EditSetPageState extends State<EditSetPage> {
   }
 
   Widget buildDistanceField() {
-    if (unit == 'kg' || unit == 'lb' || unit == 'stone') return buildWeightField();
+    if (unit == 'kg' || unit == 'lb' || unit == 'stone')
+      return buildWeightField();
     return TextFormField(
       controller: distance,
       focusNode: distNode,
@@ -369,7 +373,8 @@ class _EditSetPageState extends State<EditSetPage> {
         onTap: () => selectAll(body),
         validator: (value) {
           if (value == null) return null;
-          if (value.isNotEmpty && double.tryParse(value) == null) return 'Invalid number';
+          if (value.isNotEmpty && double.tryParse(value) == null)
+            return 'Invalid number';
           return null;
         },
       ),
@@ -467,17 +472,55 @@ class _EditSetPageState extends State<EditSetPage> {
     );
   }
 
-  Widget dateSelector() {
-    return Selector<SettingsState, String>(
-      builder: (context, longDateFormat, child) => ListTile(
-        title: const Text('Created date'),
-        subtitle: Text(
-          longDateFormat == 'timeago' ? timeago.format(created) : DateFormat(longDateFormat).format(created),
-        ),
-        trailing: const Icon(Icons.calendar_today),
-        onTap: () => selectDate(),
-      ),
-      selector: (context, settings) => settings.value.longDateFormat,
+  Widget dateSelector(String currentExercise) {
+    final lastSet = db.gymSets.select()
+      ..orderBy([
+        (u) => OrderingTerm(
+              expression: u.created,
+              mode: OrderingMode.desc,
+            ),
+      ])
+      ..where((tbl) => tbl.name.equals(currentExercise))
+      ..where((tbl) => tbl.hidden.equals(false))
+      ..limit(1);
+
+    return FutureBuilder<List<GymSet>>(
+      future: lastSet.get(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const ListTile(
+            title: Text('Created date'),
+            subtitle: Text('No date available'),
+            trailing: Icon(Icons.calendar_today),
+          );
+        }
+
+        final lastDate = snapshot.data!.first.created;
+        final now = DateTime.now();
+
+        final displayDate =
+            lastDate.add(const Duration(minutes: 3)).isAfter(now)
+                ? now
+                : widget.gymSet.id > 0
+                    ? widget.gymSet.created
+                    : lastDate.add(const Duration(minutes: 3));
+
+        created = dateSet ? created : displayDate;
+
+        return Selector<SettingsState, String>(
+          selector: (context, settings) => settings.value.longDateFormat,
+          builder: (context, longDateFormat, child) => ListTile(
+            title: const Text('Created date'),
+            subtitle: Text(
+              longDateFormat == 'timeago'
+                  ? timeago.format(created)
+                  : DateFormat(longDateFormat).format(created),
+            ),
+            trailing: const Icon(Icons.calendar_today),
+            onTap: () => selectDate(),
+          ),
+        );
+      },
     );
   }
 
@@ -513,7 +556,8 @@ class _EditSetPageState extends State<EditSetPage> {
                     }),
                     child: Image.file(
                       File(image!),
-                      errorBuilder: (context, error, stackTrace) => TextButton.icon(
+                      errorBuilder: (context, error, stackTrace) =>
+                          TextButton.icon(
                         label: const Text('Image error'),
                         icon: const Icon(Icons.error),
                         onPressed: () => pick(),
@@ -589,7 +633,10 @@ class _EditSetPageState extends State<EditSetPage> {
   material.Autocomplete<String> autocomplete(bool showBodyWeight) {
     return Autocomplete<String>(
       optionsBuilder: (textEditingValue) {
-        final searchTerms = textEditingValue.text.toLowerCase().split(" ").where((term) => term.isNotEmpty);
+        final searchTerms = textEditingValue.text
+            .toLowerCase()
+            .split(" ")
+            .where((term) => term.isNotEmpty);
         Iterable<String> opts = options;
 
         for (final term in searchTerms) {
@@ -651,7 +698,9 @@ class _EditSetPageState extends State<EditSetPage> {
       created = widget.gymSet.created;
     });
 
-    (db.gymSets.selectOnly(distinct: true)..addColumns([db.gymSets.name])).get().then((results) {
+    (db.gymSets.selectOnly(distinct: true)..addColumns([db.gymSets.name]))
+        .get()
+        .then((results) {
       final names = results.map((result) => result.read(db.gymSets.name)!);
       setState(() {
         options = names.toList();
@@ -679,7 +728,8 @@ class _EditSetPageState extends State<EditSetPage> {
       weight: double.tryParse(weight.text),
       bodyWeight: double.tryParse(body.text),
       distance: double.tryParse(distance.text),
-      duration: (int.tryParse(seconds.text) ?? 0) / 60 + (int.tryParse(minutes.text) ?? 0),
+      duration: (int.tryParse(seconds.text) ?? 0) / 60 +
+          (int.tryParse(minutes.text) ?? 0),
       cardio: cardio,
       restMs: Value(restMs),
       incline: Value(int.tryParse(incline.text)),
@@ -694,7 +744,8 @@ class _EditSetPageState extends State<EditSetPage> {
     if (widget.gymSet.id > 0) {
       await db.update(db.gymSets).replace(gymSet);
       if (image != null)
-        (db.update(db.gymSets)..where((u) => u.name.equals(name))).write(GymSetsCompanion(image: Value(image)));
+        (db.update(db.gymSets)..where((u) => u.name.equals(name)))
+            .write(GymSetsCompanion(image: Value(image)));
       if (!mounted) return;
       planState.updateDefaults();
       return Navigator.of(context).pop();
@@ -708,7 +759,8 @@ class _EditSetPageState extends State<EditSetPage> {
       final best = await isBest(gymSet);
       if (best) {
         final random = Random();
-        final randomMessage = positiveReinforcement[random.nextInt(positiveReinforcement.length)];
+        final randomMessage =
+            positiveReinforcement[random.nextInt(positiveReinforcement.length)];
         if (mounted) toast(randomMessage);
       }
     }
@@ -732,25 +784,6 @@ class _EditSetPageState extends State<EditSetPage> {
       );
     if (!mounted) return;
     return Navigator.of(context).pop();
-  }
-
-  Future<void> selectTime(DateTime pickedDate) async {
-    final TimeOfDay? pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(created),
-    );
-
-    if (pickedTime != null) {
-      setState(() {
-        created = DateTime(
-          pickedDate.year,
-          pickedDate.month,
-          pickedDate.day,
-          pickedTime.hour,
-          pickedTime.minute,
-        );
-      });
-    }
   }
 
   void setORM() {
@@ -818,9 +851,12 @@ class _EditSetPageState extends State<EditSetPage> {
       seconds.text = ((gymSet.duration * 60) % 60).floor().toString();
     }
     if (gymSet.distance != 0) distance.text = toString(gymSet.distance);
-    if (gymSet.incline != null && gymSet.incline != 0) incline.text = gymSet.incline.toString();
-    if (gymSet.category != null && gymSet.category!.isNotEmpty) categoryCtrl.text = gymSet.category!;
-    if (gymSet.notes != null && gymSet.notes!.isNotEmpty) notes.text = gymSet.notes!;
+    if (gymSet.incline != null && gymSet.incline != 0)
+      incline.text = gymSet.incline.toString();
+    if (gymSet.category != null && gymSet.category!.isNotEmpty)
+      categoryCtrl.text = gymSet.category!;
+    if (gymSet.notes != null && gymSet.notes!.isNotEmpty)
+      notes.text = gymSet.notes!;
   }
 
   Future<void> selectDate() async {
@@ -833,6 +869,26 @@ class _EditSetPageState extends State<EditSetPage> {
 
     if (pickedDate != null) {
       selectTime(pickedDate);
+    }
+  }
+
+  Future<void> selectTime(DateTime pickedDate) async {
+    final TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(created),
+    );
+
+    if (pickedTime != null) {
+      dateSet = true;
+      setState(() {
+        created = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+          pickedTime.hour,
+          pickedTime.minute,
+        );
+      });
     }
   }
 }
