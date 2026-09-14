@@ -122,8 +122,7 @@ class _HistoryListState extends State<HistoryList> {
     bool showImages,
   ) {
     final minutes = gymSet.duration.floor();
-    final seconds =
-        ((gymSet.duration * 60) % 60).floor().toString().padLeft(2, '0');
+    final seconds = ((gymSet.duration * 60) % 60).floor().toString().padLeft(2, '0');
     final distance = toString(gymSet.distance);
     final reps = toString(gymSet.reps);
     final weight = toString(gymSet.weight);
@@ -176,19 +175,14 @@ class _HistoryListState extends State<HistoryList> {
 
     leading = AnimatedSwitcher(
       duration: const Duration(milliseconds: 150),
-      transitionBuilder: (child, animation) =>
-          ScaleTransition(scale: animation, child: child),
+      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
       child: leading,
     );
 
-    String trailing = "$reps x $weight ${gymSet.unit}";
-    if (gymSet.cardio &&
-        (gymSet.unit == 'kg' ||
-            gymSet.unit == 'lb' ||
-            gymSet.unit == 'stone')) {
+    String trailing = "$reps REPS @ $weight ${gymSet.unit}";
+    if (gymSet.cardio && (gymSet.unit == 'kg' || gymSet.unit == 'lb' || gymSet.unit == 'stone')) {
       trailing = "$weight ${gymSet.unit} / $minutes:$seconds $incline";
-    } else if (gymSet.cardio &&
-        (gymSet.unit == 'km' || gymSet.unit == 'mi' || gymSet.unit == 'kcal')) {
+    } else if (gymSet.cardio && (gymSet.unit == 'km' || gymSet.unit == 'mi' || gymSet.unit == 'kcal')) {
       trailing = "$distance ${gymSet.unit} / $minutes:$seconds $incline";
     }
 
@@ -196,7 +190,7 @@ class _HistoryListState extends State<HistoryList> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          //margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             color: widget.selected.contains(gymSet.id)
@@ -216,22 +210,24 @@ class _HistoryListState extends State<HistoryList> {
   }
 
   Widget _getListItem(Widget leading, GymSet gymSet, String trailing) {
-    final title = Text(_peek ? _getSetNumber(gymSet) : gymSet.name);
+    final title = Text(_peek ? "${_getSetNumber(gymSet)}: $trailing" : gymSet.name);
     final subtitle = Selector<SettingsState, String>(
       selector: (context, settings) => settings.value.longDateFormat,
       builder: (context, dateFormat, child) => Text(
-        dateFormat == 'timeago'
-            ? timeago.format(gymSet.created)
-            : DateFormat(dateFormat).format(gymSet.created),
+        dateFormat == 'timeago' ? timeago.format(gymSet.created) : DateFormat(dateFormat).format(gymSet.created),
       ),
     );
     return ListTile(
+      dense: true,
+      visualDensity: VisualDensity.compact,
       leading: leading,
       title: title,
       subtitle: _peek ? null : subtitle,
-      trailing: Text(
-        trailing,
-        style: const TextStyle(fontSize: 16),
+      trailing: Selector<SettingsState, String>(
+        selector: (context, settings) => settings.value.shortDateFormat,
+        builder: (context, dateFormat, child) => Text(
+          dateFormat == 'timeago' ? timeago.format(gymSet.created) : DateFormat("HH:mm a").format(gymSet.created),
+        ),
       ),
       onLongPress: () => widget.onSelect(gymSet.id),
       onTap: () {
@@ -262,13 +258,12 @@ class _HistoryListState extends State<HistoryList> {
         .reversed
         .toList();
     final positionOnThisDay = sameDayEntries.indexOf(gymSet) + 1;
-    return 'Set #$positionOnThisDay';
+    return 'Set $positionOnThisDay';
   }
 
   @override
   Widget build(BuildContext context) {
-    final showImages = context
-        .select<SettingsState, bool>((settings) => settings.value.showImages);
+    final showImages = context.select<SettingsState, bool>((settings) => settings.value.showImages);
     _grouped = _groupByDay(_current);
 
     return ListView.builder(
@@ -283,7 +278,7 @@ class _HistoryListState extends State<HistoryList> {
         return StickyHeader(
           header: Container(
             color: Theme.of(context).scaffoldBackgroundColor,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
             alignment: Alignment.center,
             child: _buildSectionDivider(date),
           ),
@@ -300,9 +295,7 @@ class _HistoryListState extends State<HistoryList> {
   }
 
   void scrollListener() {
-    if (widget.scroll.position.pixels <
-            widget.scroll.position.maxScrollExtent - 200 ||
-        goingNext) return;
+    if (widget.scroll.position.pixels < widget.scroll.position.maxScrollExtent - 200 || goingNext) return;
     setState(() {
       goingNext = true;
     });
@@ -402,6 +395,5 @@ class DateHeaderDelegate extends SliverPersistentHeaderDelegate {
   double get minExtent => 44;
 
   @override
-  bool shouldRebuild(DateHeaderDelegate oldDelegate) =>
-      oldDelegate.date != date;
+  bool shouldRebuild(DateHeaderDelegate oldDelegate) => oldDelegate.date != date;
 }
