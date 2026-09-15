@@ -15,7 +15,7 @@ import 'package:sticky_headers/sticky_headers/widget.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class HistoryCollapsed extends StatefulWidget {
-  final List<HistoryDay> days;
+  final List<ExerciseItem> days;
   final ScrollController scroll;
   final Function(int) onSelect;
   final Set<int> selected;
@@ -35,11 +35,11 @@ class HistoryCollapsed extends StatefulWidget {
 
 class _HistoryCollapsedState extends State<HistoryCollapsed> {
   bool goingNext = false;
-  Map<DateTime, List<HistoryDay>> _grouped = {};
+  Map<DateTime, List<ExerciseItem>> _grouped = {};
   @override
   Widget build(BuildContext context) {
     final showImages = context.select<SettingsState, bool>((settings) => settings.value.showImages);
-    final sortedDays = List<HistoryDay>.from(widget.days)..sort((a, b) => b.day.compareTo(a.day));
+    final sortedDays = List<ExerciseItem>.from(widget.days)..sort((a, b) => b.date.compareTo(a.date));
     _grouped = _groupByDay(sortedDays);
 
     return ListView.builder(
@@ -79,7 +79,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
     widget.scroll.removeListener(scrollListener);
   }
 
-  Widget _buildSectionDivider(DateTime date, List<HistoryDay> day) {
+  Widget _buildSectionDivider(DateTime date, List<ExerciseItem> day) {
     final formats = context.read<SettingsState>().value;
     return GestureDetector(
       onTap: () {
@@ -169,7 +169,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
   }
 
   Widget historyChildren(
-    HistoryDay history,
+    ExerciseItem history,
     BuildContext context,
     bool showImages,
   ) {
@@ -225,9 +225,9 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
       },
       child: ExpansionTile(
         childrenPadding: EdgeInsets.all(0),
-        title: Text("${history.name} (${history.gymSets.length})"),
+        title: Text("${history.name} (${history.sets.length})"),
         shape: const Border.symmetric(),
-        children: history.gymSets.map(
+        children: history.sets.reversed.toList().map(
           (gymSet) {
             final minutes = gymSet.duration.floor();
             final seconds = ((gymSet.duration * 60) % 60).floor().toString().padLeft(2, '0');
@@ -295,8 +295,8 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
               leading: leading,
               title: Text(
                 gymSet.cardio
-                    ? "${_getSetNumber(gymSet, history.gymSets)}: $distance ${gymSet.unit} / $minutes:$seconds $incline"
-                    : "${_getSetNumber(gymSet, history.gymSets)}: $reps REPS @ $weight ${gymSet.unit}",
+                    ? "${_getSetNumber(gymSet, history.sets)}: $distance ${gymSet.unit} / $minutes:$seconds $incline"
+                    : "${_getSetNumber(gymSet, history.sets)}: $reps REPS @ $weight ${gymSet.unit}",
               ),
               selected: widget.selected.contains(gymSet.id),
               trailing: Selector<SettingsState, String>(
@@ -344,12 +344,12 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
     return 'Set $positionOnThisDay';
   }
 
-  Map<DateTime, List<HistoryDay>> _groupByDay(List<HistoryDay> days) {
-    final map = <DateTime, List<HistoryDay>>{};
+  Map<DateTime, List<ExerciseItem>> _groupByDay(List<ExerciseItem> days) {
+    final map = <DateTime, List<ExerciseItem>>{};
 
     for (final day in days) {
-      map.putIfAbsent(day.day, () => []);
-      map[day.day]!.add(day);
+      map.putIfAbsent(day.date, () => []);
+      map[day.date]!.add(day);
     }
 
     // Optional: sort newest first
@@ -360,28 +360,26 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
     };
   }
 
-  Widget getLastWorkout(List<HistoryDay> sets) {
+  Widget getLastWorkout(List<ExerciseItem> sets) {
     String plural(int s) => s > 1 ? 's' : '';
     if (sets.isEmpty) return SizedBox.shrink();
 
     var sortedDays = sets;
-    sortedDays.sort((a, b) => a.day.compareTo(b.day));
-    var totalWorkout = sortedDays.where((d) => d.day == sortedDays.first.day).toList();
+    sortedDays.sort((a, b) => a.date.compareTo(b.date));
+    var totalWorkout = sortedDays.where((d) => d.date == sortedDays.first.date).toList();
 
-    var cardioUnit = totalWorkout.first.gymSets.any((n) => n.cardio)
-        ? totalWorkout.first.gymSets.firstWhere((n) => n.cardio).unit
-        : '';
-    var weightUnit = totalWorkout.first.gymSets.any((n) => !n.cardio)
-        ? totalWorkout.first.gymSets.firstWhere((n) => !n.cardio).unit
-        : '';
+    var cardioUnit =
+        totalWorkout.first.sets.any((n) => n.cardio) ? totalWorkout.first.sets.firstWhere((n) => n.cardio).unit : '';
+    var weightUnit =
+        totalWorkout.first.sets.any((n) => !n.cardio) ? totalWorkout.first.sets.firstWhere((n) => !n.cardio).unit : '';
     var totalSets = 0;
     var totalReps = 0;
     var totalExercises = totalWorkout.length;
     double totalDistance = 0;
     double totalWeight = 0;
     for (var exercise in totalWorkout) {
-      totalSets += exercise.gymSets.length;
-      for (var set in exercise.gymSets) {
+      totalSets += exercise.sets.length;
+      for (var set in exercise.sets) {
         totalReps += set.reps.toInt();
         totalDistance += set.distance;
         totalWeight += (set.weight * set.reps);
@@ -390,7 +388,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
     return Selector<SettingsState, String>(
       selector: (context, settings) {
         final format = settings.value.shortDateFormat;
-        return DateFormat(format).format(sortedDays.first.day);
+        return DateFormat(format).format(sortedDays.first.date);
       },
       builder: (context, formattedDate, child) {
         return Padding(
@@ -418,21 +416,6 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
     );
   }
 
-  List<HistoryDay> getHistoryDays(List<GymSet> gymSets) {
-    List<HistoryDay> historyDays = [];
-    for (final gymSet in gymSets) {
-      final day = DateUtils.dateOnly(gymSet.created);
-      final index = historyDays.indexWhere((hd) => isSameDay(hd.day, day) && hd.name == gymSet.name);
-      if (index == -1)
-        historyDays.add(
-          HistoryDay(name: gymSet.name, gymSets: [gymSet], day: day),
-        );
-      else
-        historyDays[index].gymSets.add(gymSet);
-    }
-    return historyDays;
-  }
-
   String formatDateWithOrdinal(DateTime date) {
     String suffix(int day) {
       if (day >= 11 && day <= 13) return 'th';
@@ -453,14 +436,14 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
         '${DateFormat('MMM yy').format(date)}';
   }
 
-  Future<void> deleteWorkout(List<HistoryDay> sets) async {
+  Future<void> deleteWorkout(List<ExerciseItem> sets) async {
     for (var day in sets) {
-      final ids = day.gymSets.map((set) => set.id).toList();
+      final ids = day.sets.map((set) => set.id).toList();
       (db.delete(db.gymSets)..where((tbl) => tbl.id.isIn(ids))).go();
     }
   }
 
-  Future<void> copyWorkoutTo(List<HistoryDay> sets) async {
+  Future<void> copyWorkoutTo(List<ExerciseItem> sets) async {
     final settings = context.read<SettingsState>().value;
     final planState = context.read<PlanState>();
     var newDate = await selectDate();
@@ -471,7 +454,7 @@ class _HistoryCollapsedState extends State<HistoryCollapsed> {
     final sortedDays = sets.reversed.toList();
 
     for (var day in sortedDays) {
-      var sortedSets = day.gymSets;
+      var sortedSets = day.sets;
       sortedSets.sort((a, b) => b.created.compareTo(a.created));
       for (var gymSet in sortedSets) {
         newDate = newDate!.add(const Duration(seconds: 90));

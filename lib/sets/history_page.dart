@@ -16,12 +16,12 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-class HistoryDay {
+class ExerciseItem {
   final String name;
-  final List<GymSet> gymSets;
-  final DateTime day;
+  final List<GymSet> sets;
+  final DateTime date;
 
-  HistoryDay({required this.name, required this.gymSets, required this.day});
+  ExerciseItem({required this.name, required this.sets, required this.date});
 }
 
 class HistoryPage extends StatefulWidget {
@@ -33,8 +33,7 @@ class HistoryPage extends StatefulWidget {
   createState() => HistoryPageState();
 }
 
-class HistoryPageState extends State<HistoryPage>
-    with AutomaticKeepAliveClientMixin {
+class HistoryPageState extends State<HistoryPage> with AutomaticKeepAliveClientMixin {
   final GlobalKey<NavigatorState> navKey = GlobalKey<NavigatorState>();
 
   @override
@@ -48,8 +47,7 @@ class HistoryPageState extends State<HistoryPage>
         if (navKey.currentState!.canPop() == false) return;
         final settings = context.read<SettingsState>().value;
         final historyIndex = settings.tabs.split(',').indexOf('HistoryPage');
-        if (widget.tabController.index == historyIndex)
-          navKey.currentState!.pop();
+        if (widget.tabController.index == historyIndex) navKey.currentState!.pop();
       },
       child: Navigator(
         key: navKey,
@@ -150,12 +148,10 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                       .toList();
                   final summaries = gymSets
                       .map(
-                        (gymSet) =>
-                            "${toString(gymSet.reps)}x${toString(gymSet.weight)}${gymSet.unit} ${gymSet.name}",
+                        (gymSet) => "${toString(gymSet.reps)}x${toString(gymSet.weight)}${gymSet.unit} ${gymSet.name}",
                       )
                       .join(', ');
-                  await SharePlus.instance
-                      .share(ShareParams(text: "I just did $summaries"));
+                  await SharePlus.instance.share(ShareParams(text: "I just did $summaries"));
                   setState(() {
                     selected.clear();
                   });
@@ -171,8 +167,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                   selected.clear();
                 }),
                 onDelete: () {
-                  (db.delete(db.gymSets)..where((tbl) => tbl.id.isIn(selected)))
-                      .go();
+                  (db.delete(db.gymSets)..where((tbl) => tbl.id.isIn(selected))).go();
                   setState(() {
                     selected.clear();
                   });
@@ -198,21 +193,15 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                     "Complete some sets to see them here",
                   ),
                 ),
-              if (snapshot.hasError)
-                Expanded(child: ErrorWidget(snapshot.error.toString())),
-              if (snapshot.hasData &&
-                  snapshot.data?.isNotEmpty == true &&
-                  showStats) ...[
+              if (snapshot.hasError) Expanded(child: ErrorWidget(snapshot.error.toString())),
+              if (snapshot.hasData && snapshot.data?.isNotEmpty == true && showStats) ...[
                 Theme(
-                  data: Theme.of(context)
-                      .copyWith(dividerColor: Colors.transparent),
+                  data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
                   child: ExpansionTile(
                     childrenPadding: EdgeInsets.all(0),
                     iconColor: Theme.of(context).colorScheme.onSurface,
                     leading: Icon(
-                      expand.isExpanded
-                          ? Icons.analytics_outlined
-                          : Icons.history_outlined,
+                      expand.isExpanded ? Icons.analytics_outlined : Icons.history_outlined,
                     ),
                     title: Text(expand.isExpanded ? 'Stats' : 'History'),
                     initiallyExpanded: true,
@@ -229,12 +218,12 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
                     );
 
                     if (groupHistory) {
-                      final historyDays = getHistoryDays(
+                      final exerciseItems = _getExerciseItems(
                         snapshot.hasData ? snapshot.data! : [],
                       );
                       return HistoryCollapsed(
                         scroll: scroll,
-                        days: historyDays,
+                        days: exerciseItems.reversed.toList(),
                         onSelect: (id) {
                           if (selected.contains(id))
                             setState(() {
@@ -295,8 +284,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
     final settings = context.read<SettingsState>().value;
     final gymSets = await stream.first;
     var bodyWeight = 0.0;
-    if (settings.showBodyWeight)
-      bodyWeight = (await getBodyWeight())?.weight ?? 0.0;
+    if (settings.showBodyWeight) bodyWeight = (await getBodyWeight())?.weight ?? 0.0;
 
     GymSet gymSet = gymSets.firstOrNull ??
         GymSet(
@@ -339,20 +327,19 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
     );
   }
 
-  List<HistoryDay> getHistoryDays(List<GymSet> gymSets) {
-    List<HistoryDay> historyDays = [];
+  List<ExerciseItem> _getExerciseItems(List<GymSet> gymSets) {
+    List<ExerciseItem> exerciseItems = [];
     for (final gymSet in gymSets) {
       final day = DateUtils.dateOnly(gymSet.created);
-      final index = historyDays
-          .indexWhere((hd) => isSameDay(hd.day, day) && hd.name == gymSet.name);
+      final index = exerciseItems.indexWhere((hd) => isSameDay(hd.date, day) && hd.name == gymSet.name);
       if (index == -1)
-        historyDays.add(
-          HistoryDay(name: gymSet.name, gymSets: [gymSet], day: day),
+        exerciseItems.add(
+          ExerciseItem(name: gymSet.name, sets: [gymSet], date: day),
         );
       else
-        historyDays[index].gymSets.add(gymSet);
+        exerciseItems[index].sets.add(gymSet);
     }
-    return historyDays;
+    return exerciseItems;
   }
 
   void getStats(Future<List<GymSet>> sets) async {
@@ -370,32 +357,26 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
     String plural(int s) => s > 1 ? 's' : '';
     final today = dayOnly(DateTime.now());
     if (sets.isEmpty) return SizedBox.shrink();
-    final mostRecentDay = sets
-        .map((s) => dayOnly(s.created))
-        .where((d) => !d.isAfter(today))
-        .reduce((a, b) => a.isAfter(b) ? a : b);
+    final mostRecentDay =
+        sets.map((s) => dayOnly(s.created)).where((d) => !d.isAfter(today)).reduce((a, b) => a.isAfter(b) ? a : b);
 
-    final result =
-        sets.where((s) => dayOnly(s.created) == mostRecentDay).toList();
-    var sortedDays = getHistoryDays(result);
-    sortedDays.sort((a, b) => a.day.compareTo(b.day));
-    var totalWorkout =
-        sortedDays.where((d) => d.day == sortedDays.first.day).toList();
+    final result = sets.where((s) => dayOnly(s.created) == mostRecentDay).toList();
+    var sortedDays = _getExerciseItems(result);
+    sortedDays.sort((a, b) => a.date.compareTo(b.date));
+    var totalWorkout = sortedDays.where((d) => d.date == sortedDays.first.date).toList();
 
-    var cardioUnit = totalWorkout.first.gymSets.any((n) => n.cardio)
-        ? totalWorkout.first.gymSets.firstWhere((n) => n.cardio).unit
-        : '';
-    var weightUnit = totalWorkout.first.gymSets.any((n) => !n.cardio)
-        ? totalWorkout.first.gymSets.firstWhere((n) => !n.cardio).unit
-        : '';
+    var cardioUnit =
+        totalWorkout.first.sets.any((n) => n.cardio) ? totalWorkout.first.sets.firstWhere((n) => n.cardio).unit : '';
+    var weightUnit =
+        totalWorkout.first.sets.any((n) => !n.cardio) ? totalWorkout.first.sets.firstWhere((n) => !n.cardio).unit : '';
     var totalSets = 0;
     var totalReps = 0;
     var totalExercises = totalWorkout.length;
     double totalDistance = 0;
     double totalWeight = 0;
     for (var exercise in totalWorkout) {
-      totalSets += exercise.gymSets.length;
-      for (var set in exercise.gymSets) {
+      totalSets += exercise.sets.length;
+      for (var set in exercise.sets) {
         totalReps += set.reps.toInt();
         totalDistance += set.distance;
         totalWeight += (set.weight * set.reps);
@@ -404,10 +385,10 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
     return Selector<SettingsState, String>(
       selector: (context, settings) {
         final format = settings.value.shortDateFormat;
-        return DateFormat(format).format(sortedDays.first.day);
+        return DateFormat(format).format(sortedDays.first.date);
       },
       builder: (context, formattedDate, child) {
-        var daysSince = DateTime.now().difference(sortedDays.first.day).inDays;
+        var daysSince = DateTime.now().difference(sortedDays.first.date).inDays;
         var lastWorkout =
             'You last worked out ${daysSince == 0 ? 'today.' : daysSince == 1 ? 'yesterday.' : '$daysSince days ago on $formattedDate.'}';
         return Padding(
@@ -465,8 +446,7 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
   }
 
   void setStream() {
-    final terms =
-        search.toLowerCase().split(" ").where((term) => term.isNotEmpty);
+    final terms = search.toLowerCase().split(" ").where((term) => term.isNotEmpty);
 
     var query = (db.gymSets.select()
       ..orderBy(
@@ -484,14 +464,9 @@ class _HistoryPageWidgetState extends State<_HistoryPageWidget> {
       query = query..where((tbl) => tbl.name.contains(term));
     }
 
-    if (category != null)
-      query = query..where((tbl) => tbl.category.equals(category!));
-    if (startDate != null)
-      query = query
-        ..where((tbl) => tbl.created.isBiggerOrEqualValue(startDate!));
-    if (endDate != null)
-      query = query
-        ..where((tbl) => tbl.created.isSmallerOrEqualValue(endDate!));
+    if (category != null) query = query..where((tbl) => tbl.category.equals(category!));
+    if (startDate != null) query = query..where((tbl) => tbl.created.isBiggerOrEqualValue(startDate!));
+    if (endDate != null) query = query..where((tbl) => tbl.created.isSmallerOrEqualValue(endDate!));
     if (repsGt.text.isNotEmpty)
       query = query
         ..where(

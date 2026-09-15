@@ -273,7 +273,7 @@ class _HistoryListState extends State<HistoryList> {
       itemBuilder: (context, sectionIndex) {
         final entry = _grouped.entries.elementAt(sectionIndex);
         final date = entry.key;
-        final sets = entry.value;
+        final sets = entry.value.reversed.toList();
 
         return StickyHeader(
           header: Container(

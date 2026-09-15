@@ -72,12 +72,10 @@ class _BottomNavState extends State<BottomNav> with TickerProviderStateMixin {
             AnimatedBuilder(
               animation: _slideAnimation,
               builder: (context, child) {
-                double tabWidth = (MediaQuery.of(context).size.width - 40) /
-                    widget.tabs.length;
+                double tabWidth = (MediaQuery.of(context).size.width - 40) / widget.tabs.length;
                 double startX = _previousIndex * tabWidth;
                 double endX = widget.currentIndex * tabWidth;
-                double currentX =
-                    startX + (endX - startX) * _slideAnimation.value;
+                double currentX = startX + (endX - startX) * _slideAnimation.value;
 
                 return Positioned(
                   left: currentX + 4,
@@ -110,19 +108,14 @@ class _BottomNavState extends State<BottomNav> with TickerProviderStateMixin {
                   child: GestureDetector(
                     key: Key(tab),
                     onTap: () => widget.onTap(index),
-                    onLongPress: widget.onLongPress != null
-                        ? () => widget.onLongPress!(context, tab)
-                        : null,
+                    onLongPress: widget.onLongPress != null ? () => widget.onLongPress!(context, tab) : null,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 300),
                       curve: Curves.easeInOut,
                       height: 80,
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? color.primary
-                            : color.surfaceContainerLow,
-                        borderRadius:
-                            BorderRadius.circular(isSelected ? 25 : 18),
+                        color: isSelected ? color.primary : color.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(isSelected ? 25 : 18),
                       ),
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       child: Column(
@@ -134,9 +127,7 @@ class _BottomNavState extends State<BottomNav> with TickerProviderStateMixin {
                             curve: Curves.easeInOut,
                             child: Icon(
                               _getIconForTab(tab),
-                              color: isSelected
-                                  ? color.onPrimary
-                                  : color.onSurface,
+                              color: isSelected ? color.onPrimary : color.onSurface,
                               size: 24,
                             ),
                           ),
@@ -144,13 +135,8 @@ class _BottomNavState extends State<BottomNav> with TickerProviderStateMixin {
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
                               _getLabelForTab(tab),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelLarge
-                                  ?.copyWith(
-                                    color: isSelected
-                                        ? color.onPrimary
-                                        : color.onSurface,
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    color: isSelected ? color.onPrimary : color.onSurface,
                                   ),
                               maxLines: 1,
                               textAlign: TextAlign.center,
@@ -177,9 +163,7 @@ class _BottomNavState extends State<BottomNav> with TickerProviderStateMixin {
                       opacity: _slideAnimation.value,
                       duration: const Duration(milliseconds: 150),
                       child: Icon(
-                        isMovingRight
-                            ? Icons.keyboard_arrow_right
-                            : Icons.keyboard_arrow_left,
+                        isMovingRight ? Icons.keyboard_arrow_right : Icons.keyboard_arrow_left,
                         color: color.primary.withValues(alpha: 0.6),
                         size: 20,
                       ),
@@ -207,6 +191,8 @@ class _BottomNavState extends State<BottomNav> with TickerProviderStateMixin {
         return Icons.timer_rounded;
       case 'SettingsPage':
         return Icons.settings_rounded;
+      case 'CalendarPage':
+        return Icons.calendar_month_rounded;
       default:
         return Icons.error_rounded;
     }
@@ -224,6 +210,8 @@ class _BottomNavState extends State<BottomNav> with TickerProviderStateMixin {
         return 'Timer';
       case 'SettingsPage':
         return 'Settings';
+      case 'CalendarPage':
+        return 'Calendar';
       default:
         return 'Error';
     }

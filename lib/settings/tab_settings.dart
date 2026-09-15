@@ -25,6 +25,7 @@ class _TabSettingsState extends State<TabSettings> {
     (name: 'HistoryPage', enabled: false),
     (name: 'PlansPage', enabled: false),
     (name: 'GraphsPage', enabled: false),
+    (name: 'CalendarPage', enabled: false),
     (name: 'TimerPage', enabled: false),
     (name: 'SettingsPage', enabled: false),
   ];
@@ -42,8 +43,7 @@ class _TabSettingsState extends State<TabSettings> {
   }
 
   void setTab(String name, bool enabled) {
-    if (!enabled && tabs.where((tab) => tab.enabled == true).length == 1)
-      return toast('You need at least one tab');
+    if (!enabled && tabs.where((tab) => tab.enabled == true).length == 1) return toast('You need at least one tab');
     final index = tabs.indexWhere((tappedTab) => tappedTab.name == name);
     setState(() {
       tabs[index] = (name: name, enabled: enabled);
@@ -159,6 +159,26 @@ class _TabSettingsState extends State<TabSettings> {
                         child: const Icon(Icons.drag_handle),
                       ),
                     );
+                  } else if (tab.name == 'CalendarPage') {
+                    return ListTile(
+                      key: Key(tab.name),
+                      onTap: () => setTab(tab.name, !tab.enabled),
+                      leading: Switch(
+                        value: tab.enabled,
+                        onChanged: (value) => setTab(tab.name, value),
+                      ),
+                      title: material.Row(
+                        children: [
+                          const Icon(Icons.insights_rounded),
+                          SizedBox(width: 8),
+                          const Text("Calendar"),
+                        ],
+                      ),
+                      trailing: ReorderableDragStartListener(
+                        index: index,
+                        child: const Icon(Icons.drag_handle),
+                      ),
+                    );
                   } else if (tab.name == 'TimerPage') {
                     return ListTile(
                       key: Key(tab.name),
@@ -213,10 +233,7 @@ class _TabSettingsState extends State<TabSettings> {
           await (db.settings.update().write(
                 SettingsCompanion(
                   tabs: Value(
-                    tabs
-                        .where((tab) => tab.enabled)
-                        .map((tab) => tab.name)
-                        .join(','),
+                    tabs.where((tab) => tab.enabled).map((tab) => tab.name).join(','),
                   ),
                 ),
               ));

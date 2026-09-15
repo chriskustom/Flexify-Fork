@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:flexify/bottom_nav.dart';
+import 'package:flexify/calendar/calendar_page.dart';
 import 'package:flexify/database/database.dart';
 import 'package:flexify/graph/graphs_page.dart';
 import 'package:flexify/main.dart';
@@ -99,8 +100,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final setting = context
-        .select<SettingsState, String>((settings) => settings.value.tabs);
+    final setting = context.select<SettingsState, String>((settings) => settings.value.tabs);
     final tabs = setting.split(',');
     final scrollableTabs = context.select<SettingsState, bool>(
       (settings) => settings.value.scrollableTabs,
@@ -127,9 +127,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           children: [
             TabBarView(
               controller: controller,
-              physics: scrollableTabs
-                  ? const AlwaysScrollableScrollPhysics()
-                  : const NeverScrollableScrollPhysics(),
+              physics: scrollableTabs ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
               children: tabs.map((tab) {
                 if (tab == 'HistoryPage')
                   return HistoryPage(tabController: controller);
@@ -143,6 +141,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   return const TimerPage();
                 else if (tab == 'SettingsPage')
                   return const SettingsPage();
+                else if (tab == 'CalendarPage')
+                  return CalendarPage(
+                    tabController: controller,
+                  );
                 else
                   return ErrorWidget("Couldn't build tab content.");
               }).toList(),
