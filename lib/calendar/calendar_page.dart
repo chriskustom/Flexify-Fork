@@ -24,7 +24,8 @@ class CalendarPage extends StatefulWidget {
   State<CalendarPage> createState() => CalendarPageState();
 }
 
-class CalendarPageState extends State<CalendarPage> with AutomaticKeepAliveClientMixin {
+class CalendarPageState extends State<CalendarPage>
+    with AutomaticKeepAliveClientMixin {
   final GlobalKey<NavigatorState> navKey = GlobalKey<NavigatorState>();
 
   @override
@@ -145,8 +146,13 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
           }
           final allGymSets = snapshot.data ?? <GymSet>[];
 
-          final thisMonthsGymSets =
-              allGymSets.where((t) => t.created.month == monthToFilter && t.created.year == yearToFilter).toList();
+          final thisMonthsGymSets = allGymSets
+              .where(
+                (t) =>
+                    t.created.month == monthToFilter &&
+                    t.created.year == yearToFilter,
+              )
+              .toList();
 
           final exerciseItems = _getExerciseItems(thisMonthsGymSets);
 
@@ -184,6 +190,14 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(40),
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(context).colorScheme.shadow.withValues(alpha: .5),
+              spreadRadius: 0,
+              blurRadius: 10,
+              offset: Offset(0, 5),
+            ),
+          ],
         ),
         child: ListTile(
           tileColor: Colors.transparent,
@@ -209,24 +223,13 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
                 ? IconButton(
                     key: const ValueKey('backButton'),
                     icon: const Icon(Icons.arrow_back),
-                    padding: const EdgeInsets.only(
-                      left: 16,
-                      right: 8,
-                    ),
                     onPressed: () {
                       setState(() {
                         selected.clear();
                       });
                     },
                   )
-                : const Padding(
-                    key: ValueKey('calendarIcon'),
-                    padding: EdgeInsets.only(
-                      left: 16,
-                      right: 8,
-                    ),
-                    child: Icon(Icons.calendar_month_rounded),
-                  ),
+                : const Icon(Icons.calendar_month_rounded),
           ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -279,7 +282,9 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
 
                           final ids = selected.toList();
 
-                          await (db.delete(db.gymSets)..where((tbl) => tbl.id.isIn(ids))).go();
+                          await (db.delete(db.gymSets)
+                                ..where((tbl) => tbl.id.isIn(ids)))
+                              .go();
 
                           if (!context.mounted) return;
 
@@ -302,9 +307,12 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
                   icon: const Icon(Icons.more_vert),
                   tooltip: 'Show menu',
                   onPressed: () async {
-                    final RenderBox button = _menuKey.currentContext!.findRenderObject() as RenderBox;
+                    final RenderBox button = _menuKey.currentContext!
+                        .findRenderObject() as RenderBox;
 
-                    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+                    final RenderBox overlay = Overlay.of(context)
+                        .context
+                        .findRenderObject() as RenderBox;
 
                     final Offset buttonPosition = button.localToGlobal(
                       Offset.zero,
@@ -359,7 +367,9 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
                         setState(() {
                           selected
                             ..clear()
-                            ..addAll(selectedDayGymSets.map((gymSet) => gymSet.id));
+                            ..addAll(
+                              selectedDayGymSets.map((gymSet) => gymSet.id),
+                            );
                         });
                         break;
 
@@ -440,8 +450,8 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
             );
           },
         ),
-        Theme(
-          data: Theme.of(context),
+        Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
           child: TableCalendar<ExerciseItem>(
             firstDay: DateTime(1900, 1, 1),
             lastDay: DateTime(2100, 12, 31),
@@ -461,9 +471,9 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
               markerBuilder: (context, date, events) {
                 if (events.isEmpty) return SizedBox();
                 return Container(
-                  width: double.infinity, // ← stretches full cell width
+                  width: double.infinity,
                   height: 4,
-                  margin: EdgeInsets.only(top: 2, left: 10, right: 10),
+                  margin: EdgeInsets.only(top: 2, left: 15, right: 15),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.onSurface,
                     borderRadius: BorderRadius.circular(2),
@@ -508,12 +518,14 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
                 shape: BoxShape.circle,
               ),
               cellMargin: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              todayTextStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
+              todayTextStyle:
+                  TextStyle(color: Theme.of(context).colorScheme.primary),
               selectedDecoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primary,
                 shape: BoxShape.circle,
               ),
-              selectedTextStyle: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+              selectedTextStyle:
+                  TextStyle(color: Theme.of(context).colorScheme.onPrimary),
               markerDecoration: BoxDecoration(
                 color: Colors.transparent,
                 shape: BoxShape.circle,
@@ -584,7 +596,9 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
     List<ExerciseItem> exerciseItems = [];
     for (final gymSet in gymSets) {
       final day = DateUtils.dateOnly(gymSet.created);
-      final index = exerciseItems.indexWhere((hd) => isSameDay(hd.date, day) && hd.name == gymSet.name);
+      final index = exerciseItems.indexWhere(
+        (hd) => isSameDay(hd.date, day) && hd.name == gymSet.name,
+      );
       if (index == -1)
         exerciseItems.add(
           ExerciseItem(name: gymSet.name, sets: [gymSet], date: day),

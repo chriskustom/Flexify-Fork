@@ -43,7 +43,8 @@ class _TabSettingsState extends State<TabSettings> {
   }
 
   void setTab(String name, bool enabled) {
-    if (!enabled && tabs.where((tab) => tab.enabled == true).length == 1) return toast('You need at least one tab');
+    if (!enabled && tabs.where((tab) => tab.enabled == true).length == 1)
+      return toast('You need at least one tab');
     final index = tabs.indexWhere((tappedTab) => tappedTab.name == name);
     setState(() {
       tabs[index] = (name: name, enabled: enabled);
@@ -169,7 +170,7 @@ class _TabSettingsState extends State<TabSettings> {
                       ),
                       title: material.Row(
                         children: [
-                          const Icon(Icons.insights_rounded),
+                          const Icon(Icons.calendar_month_rounded),
                           SizedBox(width: 8),
                           const Text("Calendar"),
                         ],
@@ -233,7 +234,10 @@ class _TabSettingsState extends State<TabSettings> {
           await (db.settings.update().write(
                 SettingsCompanion(
                   tabs: Value(
-                    tabs.where((tab) => tab.enabled).map((tab) => tab.name).join(','),
+                    tabs
+                        .where((tab) => tab.enabled)
+                        .map((tab) => tab.name)
+                        .join(','),
                   ),
                 ),
               ));
