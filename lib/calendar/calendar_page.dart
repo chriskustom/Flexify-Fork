@@ -24,8 +24,7 @@ class CalendarPage extends StatefulWidget {
   State<CalendarPage> createState() => CalendarPageState();
 }
 
-class CalendarPageState extends State<CalendarPage>
-    with AutomaticKeepAliveClientMixin {
+class CalendarPageState extends State<CalendarPage> with AutomaticKeepAliveClientMixin {
   final GlobalKey<NavigatorState> navKey = GlobalKey<NavigatorState>();
 
   @override
@@ -148,9 +147,7 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
 
           final thisMonthsGymSets = allGymSets
               .where(
-                (t) =>
-                    t.created.month == monthToFilter &&
-                    t.created.year == yearToFilter,
+                (t) => t.created.month == monthToFilter && t.created.year == yearToFilter,
               )
               .toList();
 
@@ -282,9 +279,7 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
 
                           final ids = selected.toList();
 
-                          await (db.delete(db.gymSets)
-                                ..where((tbl) => tbl.id.isIn(ids)))
-                              .go();
+                          await (db.delete(db.gymSets)..where((tbl) => tbl.id.isIn(ids))).go();
 
                           if (!context.mounted) return;
 
@@ -307,12 +302,9 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
                   icon: const Icon(Icons.more_vert),
                   tooltip: 'Show menu',
                   onPressed: () async {
-                    final RenderBox button = _menuKey.currentContext!
-                        .findRenderObject() as RenderBox;
+                    final RenderBox button = _menuKey.currentContext!.findRenderObject() as RenderBox;
 
-                    final RenderBox overlay = Overlay.of(context)
-                        .context
-                        .findRenderObject() as RenderBox;
+                    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
 
                     final Offset buttonPosition = button.localToGlobal(
                       Offset.zero,
@@ -420,7 +412,6 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
           ),
         )
         .toList();
-
     return Column(
       children: [
         _CalendarHeader(
@@ -518,14 +509,12 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
                 shape: BoxShape.circle,
               ),
               cellMargin: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-              todayTextStyle:
-                  TextStyle(color: Theme.of(context).colorScheme.primary),
+              todayTextStyle: TextStyle(color: Theme.of(context).colorScheme.primary),
               selectedDecoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.primary,
                 shape: BoxShape.circle,
               ),
-              selectedTextStyle:
-                  TextStyle(color: Theme.of(context).colorScheme.onPrimary),
+              selectedTextStyle: TextStyle(color: Theme.of(context).colorScheme.onPrimary),
               markerDecoration: BoxDecoration(
                 color: Colors.transparent,
                 shape: BoxShape.circle,
@@ -537,55 +526,80 @@ class _CalendarPageWidgetState extends State<_CalendarPageWidget> {
           height: 8.0,
         ),
         Expanded(
-          child: Builder(
-            builder: (context) {
-              if (selectedDayExercises.isEmpty) {
-                return Center(
-                  child: Text('No gains made on this day.'),
-                );
-              }
-
-              final groupHistory = context.select<SettingsState, bool>(
-                (settings) => settings.value.groupHistory,
-              );
-
-              if (groupHistory) {
-                return HistoryCollapsed(
-                  scroll: scroll,
-                  days: selectedDayExercises.reversed.toList(),
-                  onSelect: (id) {
-                    if (selected.contains(id))
-                      setState(() {
-                        selected.remove(id);
-                      });
-                    else
-                      setState(() {
-                        selected.add(id);
-                      });
-                  },
-                  selected: selected,
-                  onNext: () {},
-                );
-              } else {
-                return HistoryList(
-                  peek: false,
-                  scroll: scroll,
-                  sets: selectedDayExercises.expand((e) => e.sets).toList(),
-                  onSelect: (id) {
-                    if (selected.contains(id))
-                      setState(() {
-                        selected.remove(id);
-                      });
-                    else
-                      setState(() {
-                        selected.add(id);
-                      });
-                  },
-                  selected: selected,
-                  onNext: () {},
-                );
+          child: GestureDetector(
+            onHorizontalDragEnd: (details) {
+              print(details.primaryVelocity);
+              if (details.primaryVelocity != null) {
+                if (details.primaryVelocity! > 0) {
+                  _pageController.previousPage(
+                    duration: const Duration(
+                      milliseconds: 300,
+                    ),
+                    curve: Curves.easeOut,
+                  );
+                } else {
+                  _pageController.nextPage(
+                    duration: const Duration(
+                      milliseconds: 300,
+                    ),
+                    curve: Curves.easeOut,
+                  );
+                }
               }
             },
+            child: Builder(
+              builder: (context) {
+                if (selectedDayExercises.isEmpty) {
+                  return ConstrainedBox(
+                    constraints: BoxConstraints.expand(),
+                    child: Padding(
+                        padding: EdgeInsetsGeometry.only(top: 16),
+                        child: Text('No gains made on this day.', textAlign: TextAlign.center)),
+                  );
+                }
+
+                final groupHistory = context.select<SettingsState, bool>(
+                  (settings) => settings.value.groupHistory,
+                );
+
+                if (groupHistory) {
+                  return HistoryCollapsed(
+                    scroll: scroll,
+                    days: selectedDayExercises.reversed.toList(),
+                    onSelect: (id) {
+                      if (selected.contains(id))
+                        setState(() {
+                          selected.remove(id);
+                        });
+                      else
+                        setState(() {
+                          selected.add(id);
+                        });
+                    },
+                    selected: selected,
+                    onNext: () {},
+                  );
+                } else {
+                  return HistoryList(
+                    peek: false,
+                    scroll: scroll,
+                    sets: selectedDayExercises.expand((e) => e.sets).toList(),
+                    onSelect: (id) {
+                      if (selected.contains(id))
+                        setState(() {
+                          selected.remove(id);
+                        });
+                      else
+                        setState(() {
+                          selected.add(id);
+                        });
+                    },
+                    selected: selected,
+                    onNext: () {},
+                  );
+                }
+              },
+            ),
           ),
         ),
       ],
