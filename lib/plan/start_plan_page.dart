@@ -4,14 +4,16 @@ import 'dart:math';
 import 'package:drift/drift.dart';
 import 'package:flexify/animated_fab.dart';
 import 'package:flexify/constants.dart';
+import 'package:flexify/custom_set_indicator.dart';
 import 'package:flexify/database/database.dart';
 import 'package:flexify/database/gym_sets.dart';
 import 'package:flexify/graph/graph_history_page.dart';
 import 'package:flexify/main.dart';
 import 'package:flexify/permissions_page.dart';
 import 'package:flexify/plan/edit_plan_page.dart';
+import 'package:flexify/plan/exercise_modal.dart';
 import 'package:flexify/plan/plan_state.dart';
-import 'package:flexify/plan/start_list.dart';
+import 'package:flexify/sets/edit_set_page.dart';
 import 'package:flexify/settings/settings_state.dart';
 import 'package:flexify/timer/timer_state.dart';
 import 'package:flexify/utils.dart';
@@ -28,6 +30,11 @@ class StartPlanPage extends StatefulWidget {
   @override
   createState() => _StartPlanPageState();
 }
+
+typedef Tapped = ({
+  int index,
+  DateTime dateTime,
+});
 
 class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserver {
   final reps = TextEditingController(text: "0.0");
@@ -52,6 +59,104 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
   late String unit = 'kg';
   late String title = widget.plan.days.replaceAll(",", ", ");
 
+  Tapped lastTap = (index: 0, dateTime: DateTime(0));
+  int? expandedIndex = 0;
+  final Map<int, ExpansibleController> controllers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    planState.addListener(planChanged);
+    WidgetsBinding.instance.addObserver(this);
+
+    planState = context.read<PlanState>();
+    title = widget.plan.title?.isNotEmpty == true ? widget.plan.title! : widget.plan.days.replaceAll(",", ", ");
+
+    _loadExercises();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (controllers[0] != null) {
+        setState(() {
+          controllers[0]!.expand();
+        });
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state != AppLifecycleState.resumed) return;
+    if (rpms == null || !mounted || lastSaved == null) return;
+
+    final settings = context.read<SettingsState>().value;
+    final difference = DateTime.now().difference(lastSaved!);
+
+    if (cardio && settings.durationEstimation) {
+      minutes.text = difference.inMinutes.toString();
+      seconds.text = (difference.inSeconds % 60).toString();
+    } else if (!cardio && settings.repEstimation) {
+      final parsedWeight = double.parse(weight.text);
+      stream.first.then((planExercises) {
+        final closestRpm = rpms!.where((rpm) => rpm.name == planExercises[selected].exercise).reduce(
+              (rpm1, rpm2) => (rpm1.weight - parsedWeight).abs() < (rpm2.weight - parsedWeight).abs() ? rpm1 : rpm2,
+            );
+
+        final estimatedReps = (difference.inMinutes * closestRpm.rpm).clamp(1, 50);
+        if (estimatedReps <= 0) return;
+
+        reps.text = estimatedReps.toInt().toString();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    reps.dispose();
+    weight.dispose();
+    distance.dispose();
+    minutes.dispose();
+    incline.dispose();
+    notes.dispose();
+    seconds.dispose();
+
+    WidgetsBinding.instance.removeObserver(this);
+    planState.removeListener(planChanged);
+
+    super.dispose();
+  }
+
+  Future<void> _loadExercises() async {
+    setState(() {
+      stream = (db.planExercises.select()
+            ..where(
+              (pe) => pe.planId.equals(widget.plan.id) & pe.enabled,
+            )
+            ..orderBy(
+              [
+                (u) => OrderingTerm(
+                      expression: u.sequence,
+                      mode: OrderingMode.asc,
+                    ),
+              ],
+            ))
+          .watch();
+    });
+
+    select(0);
+    if (!mounted) return;
+    final settings = context.read<SettingsState>().value;
+    if (settings.repEstimation) {
+      getRpms().then((value) => setState(() => rpms = value));
+    }
+
+    if (settings.strengthUnit != 'last-entry' && !cardio) {
+      setState(() => unit = settings.strengthUnit);
+    } else if (settings.cardioUnit != 'last-entry' && cardio) {
+      setState(() => unit = settings.cardioUnit);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.plan.title?.isNotEmpty == true) title = widget.plan.title!;
@@ -61,7 +166,13 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
       stream: stream,
       builder: (context, snapshot) {
         if (snapshot.data == null) return SizedBox();
-
+        for (var e in snapshot.data!) {
+          print('${snapshot.data!.indexOf(e)} - ${e.exercise}');
+          controllers.putIfAbsent(
+            snapshot.data!.indexOf(e),
+            () => ExpansibleController(),
+          );
+        }
         return Scaffold(
           resizeToAvoidBottomInset: false,
           appBar: AppBar(
@@ -142,25 +253,8 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
               key: key,
               child: material.Column(
                 children: [
-                  if (!cardio)
-                    Row(
-                      children: [
-                        ...strengthFields(snapshot),
-                      ],
-                    ),
-                  if (cardio) ...cardioFields(snapshot),
-                  unitSelector(),
-                  notesField(),
                   Expanded(
-                    child: StartList(
-                      exercises: snapshot.data!,
-                      selected: selected,
-                      onSelect: select,
-                      plan: widget.plan,
-                      onMax: () {
-                        planState.updateGymCounts(widget.plan.id);
-                      },
-                    ),
+                    child: _buildPlanList(context, snapshot),
                   ),
                 ],
               ),
@@ -354,7 +448,10 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
         child: TextFormField(
           controller: notes,
           maxLines: 3,
-          decoration: const InputDecoration(labelText: 'Notes'),
+          decoration: const InputDecoration(
+            labelText: 'Notes',
+            border: InputBorder.none,
+          ),
         ),
       ),
     );
@@ -393,49 +490,6 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
     ];
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    if (state != AppLifecycleState.resumed) return;
-    if (rpms == null || !mounted || lastSaved == null) return;
-
-    final settings = context.read<SettingsState>().value;
-    final difference = DateTime.now().difference(lastSaved!);
-
-    if (cardio && settings.durationEstimation) {
-      minutes.text = difference.inMinutes.toString();
-      seconds.text = (difference.inSeconds % 60).toString();
-    } else if (!cardio && settings.repEstimation) {
-      final parsedWeight = double.parse(weight.text);
-      stream.first.then((planExercises) {
-        final closestRpm = rpms!.where((rpm) => rpm.name == planExercises[selected].exercise).reduce(
-              (rpm1, rpm2) => (rpm1.weight - parsedWeight).abs() < (rpm2.weight - parsedWeight).abs() ? rpm1 : rpm2,
-            );
-
-        final estimatedReps = (difference.inMinutes * closestRpm.rpm).clamp(1, 50);
-        if (estimatedReps <= 0) return;
-
-        reps.text = estimatedReps.toInt().toString();
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    reps.dispose();
-    weight.dispose();
-    distance.dispose();
-    minutes.dispose();
-    incline.dispose();
-    notes.dispose();
-    seconds.dispose();
-
-    WidgetsBinding.instance.removeObserver(this);
-    planState.removeListener(planChanged);
-
-    super.dispose();
-  }
-
   Future<GymSet?> getLast(String exercise) async {
     return (db.gymSets.select()
           ..where((tbl) => db.gymSets.name.equals(exercise))
@@ -447,49 +501,6 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
           ])
           ..limit(1))
         .getSingleOrNull();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    planState.addListener(planChanged);
-    WidgetsBinding.instance.addObserver(this);
-
-    planState = context.read<PlanState>();
-    title = widget.plan.title?.isNotEmpty == true ? widget.plan.title! : widget.plan.days.replaceAll(",", ", ");
-
-    _loadExercises();
-  }
-
-  Future<void> _loadExercises() async {
-    setState(() {
-      stream = (db.planExercises.select()
-            ..where(
-              (pe) => pe.planId.equals(widget.plan.id) & pe.enabled,
-            )
-            ..orderBy(
-              [
-                (u) => OrderingTerm(
-                      expression: u.sequence,
-                      mode: OrderingMode.asc,
-                    ),
-              ],
-            ))
-          .watch();
-    });
-
-    select(0);
-    if (!mounted) return;
-    final settings = context.read<SettingsState>().value;
-    if (settings.repEstimation) {
-      getRpms().then((value) => setState(() => rpms = value));
-    }
-
-    if (settings.strengthUnit != 'last-entry' && !cardio) {
-      setState(() => unit = settings.strengthUnit);
-    } else if (settings.cardioUnit != 'last-entry' && cardio) {
-      setState(() => unit = settings.cardioUnit);
-    }
   }
 
   void _updateGymSetTextFields(GymSet gymSet) {
@@ -633,7 +644,6 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
     final first = await stream.first;
     final last = await getLast(first[index].exercise);
     if (last == null || !mounted) return;
-
     setState(() => _updateGymSetTextFields(last));
   }
 
@@ -645,5 +655,218 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
     } else {
       weight.text = toString(weightSet.weight);
     }
+  }
+
+  void tap(int index, List<GymCount> counts, String exercise) async {
+    select(index);
+    final count = counts.elementAtOrNull(index);
+    if (count == null) return;
+    if (counts.elementAtOrNull(index)?.count == 0) return;
+
+    if (DateTime.now().difference(lastTap.dateTime) >= const Duration(milliseconds: 300) || index != lastTap.index)
+      return setState(() {
+        lastTap = (index: index, dateTime: DateTime.now());
+      });
+
+    final gymSet = await (db.gymSets.select()
+          ..where((tbl) => tbl.name.equals(exercise))
+          ..orderBy(
+            [
+              (u) => OrderingTerm(expression: u.created, mode: OrderingMode.desc),
+            ],
+          )
+          ..limit(1))
+        .getSingle();
+    if (!mounted) return;
+
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => EditSetPage(gymSet: gymSet)),
+    );
+  }
+
+  Widget _buildPlanList(BuildContext context, AsyncSnapshot<List<PlanExercise>> snapshot) {
+    final exercises = snapshot.data!;
+    final max = context.select<SettingsState, int>((settings) => settings.value.maxSets);
+    final trailing = context.select<SettingsState, PlanTrailing>(
+      (settings) => PlanTrailing.values.byName(
+        settings.value.planTrailing.replaceFirst('PlanTrailing.', ''),
+      ),
+    );
+    final state = context.watch<PlanState>();
+    final counts = state.gymCounts;
+
+    if (trailing == PlanTrailing.reorder)
+      return ReorderableListView.builder(
+        itemCount: exercises.length,
+        padding: const EdgeInsets.only(bottom: 76),
+        itemBuilder: (context, index) => itemBuilder(context, snapshot, index, max, trailing, counts),
+        onReorder: (oldIndex, newIndex) async {
+          if (oldIndex < newIndex) {
+            newIndex--;
+          }
+
+          final item = exercises.removeAt(oldIndex);
+          exercises.insert(newIndex, item);
+
+          await db.batch((batch) {
+            for (var i = 0; i < exercises.length; i++) {
+              batch.update(
+                db.planExercises,
+                PlanExercisesCompanion(sequence: Value(i)),
+                where: (pe) => pe.id.equals(exercises[i].id),
+              );
+            }
+          });
+
+          if (!context.mounted) return;
+          final state = context.read<PlanState>();
+          state.setExercises(widget.plan.toCompanion(false));
+          state.updatePlans(null);
+        },
+      );
+    else
+      return ListView.builder(
+        padding: const EdgeInsets.only(bottom: 76),
+        itemCount: exercises.length,
+        itemBuilder: (context, index) => itemBuilder(context, snapshot, index, max, trailing, counts),
+      );
+  }
+
+  Widget itemBuilder(
+    BuildContext context,
+    AsyncSnapshot<List<PlanExercise>> snapshot,
+    int index,
+    int maxSets,
+    PlanTrailing trailing,
+    List<GymCount> counts,
+  ) {
+    final exercise = snapshot.data![index];
+    final idx = counts.indexWhere((element) => element.name == exercise.exercise);
+    var count = 0;
+    int max = maxSets;
+
+    if (idx > -1) {
+      count = counts[idx].count;
+      max = counts[idx].maxSets ?? maxSets;
+    }
+
+    Widget trail = const SizedBox();
+    switch (trailing) {
+      case PlanTrailing.reorder:
+        trail = ReorderableDragStartListener(
+          index: index,
+          child: const Icon(
+            Icons.drag_handle,
+            size: 32,
+          ),
+        );
+        break;
+
+      case PlanTrailing.ratio:
+        trail = Text(
+          "$count / $max",
+          style: const TextStyle(fontSize: 16),
+        );
+        break;
+
+      case PlanTrailing.count:
+        trail = Text(
+          count.toString(),
+          style: const TextStyle(fontSize: 16),
+        );
+        break;
+
+      case PlanTrailing.percent:
+        trail = Text(
+          "${(count / max * 100).toStringAsFixed(2)}%",
+          style: const TextStyle(fontSize: 16),
+        );
+        break;
+
+      case PlanTrailing.none:
+        trail = const SizedBox();
+        break;
+    }
+
+    return GestureDetector(
+      key: Key(exercise.exercise),
+      onLongPressStart: (details) async {
+        showModalBottomSheet(
+          useRootNavigator: true,
+          context: context,
+          builder: (context) {
+            return SafeArea(
+              child: ExerciseModal(
+                planId: widget.plan.id,
+                exercise: exercise.exercise,
+                hasData: count > 0,
+                onSelect: () => select(index),
+                onMax: () {
+                  planState.updateGymCounts(widget.plan.id);
+                },
+              ),
+            );
+          },
+        );
+      },
+      child: material.Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              controller: controllers.putIfAbsent(
+                index,
+                () => ExpansibleController(),
+              ),
+              onExpansionChanged: (open) {
+                if (open) {
+                  if (expandedIndex != null && expandedIndex != index) {
+                    controllers[expandedIndex]?.collapse();
+                  }
+
+                  expandedIndex = index;
+
+                  tap(index, counts, exercise.exercise);
+                } else if (expandedIndex == index) {
+                  expandedIndex = null;
+                }
+              },
+              trailing: trail,
+              title: Row(
+                children: [
+                  Radio(
+                    value: index == selected,
+                    groupValue: true,
+                    onChanged: (value) {
+                      select(index);
+                    },
+                  ),
+                  Flexible(
+                    child: Text(exercise.exercise),
+                  ),
+                ],
+              ),
+              children: [
+                if (!cardio)
+                  Row(
+                    children: [
+                      ...strengthFields(snapshot),
+                    ],
+                  ),
+                if (cardio) ...cardioFields(snapshot),
+                unitSelector(),
+                notesField(),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 4,
+          ),
+          CustomSetIndicator(count: count, max: max),
+        ],
+      ),
+    );
   }
 }
