@@ -8,7 +8,8 @@ import 'package:drift/drift.dart'
         TableOrViewStatements,
         Value,
         BooleanExpressionOperators,
-        QueryTableExtensions;
+        QueryTableExtensions,
+        ComparableExpr;
 import 'package:flexify/animated_fab.dart';
 import 'package:flexify/constants.dart';
 import 'package:flexify/custom_set_indicator.dart';
@@ -47,10 +48,6 @@ typedef Tapped = ({
 
 class _StartPlanPageState extends State<StartPlanPage>
     with WidgetsBindingObserver {
-  // ---------------------------------------------------------------------------
-  // Controllers
-  // ---------------------------------------------------------------------------
-
   final reps = TextEditingController(text: '0.0');
   final weight = TextEditingController(text: '0.0');
   final notes = TextEditingController();
@@ -60,10 +57,6 @@ class _StartPlanPageState extends State<StartPlanPage>
   final incline = TextEditingController(text: '0');
 
   final formKey = GlobalKey<FormState>();
-
-  // ---------------------------------------------------------------------------
-  // State
-  // ---------------------------------------------------------------------------
 
   int selected = 0;
   bool cardio = false;
@@ -88,10 +81,6 @@ class _StartPlanPageState extends State<StartPlanPage>
   int? expandedIndex = 0;
 
   final Map<int, ExpansibleController> controllers = {};
-
-  // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
 
   @override
   void initState() {
@@ -155,10 +144,6 @@ class _StartPlanPageState extends State<StartPlanPage>
     super.dispose();
   }
 
-  // ---------------------------------------------------------------------------
-  // Loading
-  // ---------------------------------------------------------------------------
-
   Future<void> _loadExercises() async {
     stream = (db.planExercises.select()
           ..where(
@@ -192,10 +177,6 @@ class _StartPlanPageState extends State<StartPlanPage>
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Estimation
-  // ---------------------------------------------------------------------------
-
   void _estimateCardioDuration(Duration difference) {
     minutes.text = difference.inMinutes.toString();
     seconds.text = (difference.inSeconds % 60).toString();
@@ -226,10 +207,6 @@ class _StartPlanPageState extends State<StartPlanPage>
 
     reps.text = estimatedReps.toInt().toString();
   }
-
-  // ---------------------------------------------------------------------------
-  // Build
-  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -307,10 +284,6 @@ class _StartPlanPageState extends State<StartPlanPage>
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // History / Plan editing
-  // ---------------------------------------------------------------------------
-
   Future<void> _showHistory() async {
     final exercise = currentExercise;
     if (exercise == null) return;
@@ -374,10 +347,6 @@ class _StartPlanPageState extends State<StartPlanPage>
       ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Fields
-  // ---------------------------------------------------------------------------
 
   List<Widget> strengthFields(
     AsyncSnapshot<List<PlanExercise>> snapshot,
@@ -546,10 +515,6 @@ class _StartPlanPageState extends State<StartPlanPage>
     return null;
   }
 
-  // ---------------------------------------------------------------------------
-  // Unit / Notes
-  // ---------------------------------------------------------------------------
-
   Widget unitSelector() {
     return Selector<SettingsState, bool>(
       selector: (context, settings) => settings.value.showUnits,
@@ -624,10 +589,6 @@ class _StartPlanPageState extends State<StartPlanPage>
     ];
   }
 
-  // ---------------------------------------------------------------------------
-  // Gym sets
-  // ---------------------------------------------------------------------------
-
   Future<GymSet?> getLast(String exercise) {
     return (db.gymSets.select()
           ..where((tbl) => tbl.name.equals(exercise))
@@ -666,9 +627,27 @@ class _StartPlanPageState extends State<StartPlanPage>
     currentExercise = gymSet.name;
   }
 
-  // ---------------------------------------------------------------------------
-  // Plan changes
-  // ---------------------------------------------------------------------------
+  Stream<List<GymSet>> _todaySetsStream(String exercise) {
+    final now = DateTime.now();
+    final startOfDay = DateTime(now.year, now.month, now.day);
+    final startOfTomorrow = startOfDay.add(const Duration(days: 1));
+
+    return (db.gymSets.select()
+          ..where(
+            (set) =>
+                set.planId.equals(widget.plan.id) &
+                set.name.equals(exercise) &
+                set.created.isBiggerOrEqualValue(startOfDay) &
+                set.created.isSmallerThanValue(startOfTomorrow),
+          )
+          ..orderBy([
+            (set) => OrderingTerm(
+                  expression: set.created,
+                  mode: OrderingMode.asc,
+                ),
+          ]))
+        .watch();
+  }
 
   void planChanged() {
     final index = planState.plans.indexWhere(
@@ -688,10 +667,6 @@ class _StartPlanPageState extends State<StartPlanPage>
       title = plan.days.replaceAll(',', ', ');
     });
   }
-
-  // ---------------------------------------------------------------------------
-  // Save
-  // ---------------------------------------------------------------------------
 
   Future<void> save(
     AsyncSnapshot<List<PlanExercise>> snapshot,
@@ -844,10 +819,6 @@ class _StartPlanPageState extends State<StartPlanPage>
     return lastSet?.bodyWeight;
   }
 
-  // ---------------------------------------------------------------------------
-  // Selection / interaction
-  // ---------------------------------------------------------------------------
-
   Future<void> select(int index) async {
     setState(() => selected = index);
 
@@ -920,10 +891,6 @@ class _StartPlanPageState extends State<StartPlanPage>
       ),
     );
   }
-
-  // ---------------------------------------------------------------------------
-  // Plan list
-  // ---------------------------------------------------------------------------
 
   Widget _buildPlanList(
     BuildContext context,
@@ -1029,7 +996,6 @@ class _StartPlanPageState extends State<StartPlanPage>
     final iconColor = index == expandedIndex
         ? Theme.of(context).colorScheme.primary
         : Colors.white;
-
     return GestureDetector(
       key: Key(exercise.exercise),
       onLongPressStart: (_) => _showExerciseModal(
@@ -1087,9 +1053,14 @@ class _StartPlanPageState extends State<StartPlanPage>
             ),
           ),
           const SizedBox(height: 4),
-          CustomSetIndicator(
-            count: count,
-            max: max,
+          StreamBuilder<List<GymSet>>(
+            stream: _todaySetsStream(exercise.exercise),
+            builder: (context, snapshot) {
+              return CustomSetIndicator(
+                sets: snapshot.data ?? const [],
+                max: max,
+              );
+            },
           ),
           const SizedBox(height: 4),
         ],

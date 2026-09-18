@@ -132,7 +132,11 @@ class _PlanTileState extends State<PlanTile> {
           stream: _exercisesStream,
           builder: (context, snapshot) {
             if (snapshot.hasData) {
-              return Text(snapshot.data!.map((e) => e.exercise).join(', '));
+              return Text(
+                overflow: TextOverflow.ellipsis,
+                snapshot.data!.map((e) => e.exercise).join(', '),
+                maxLines: 2,
+              );
             } else if (snapshot.hasError) {
               return Text('Error: ${snapshot.error}');
             }
