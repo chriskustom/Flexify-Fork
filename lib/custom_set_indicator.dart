@@ -30,9 +30,10 @@ class CustomSetIndicator extends StatelessWidget {
                       fit: BoxFit.scaleDown,
                       child: Text(
                         '${(sets[i].reps.toInt())} × '
-                        '${(sets[i].weight)} '
+                        '${(sets[i].weight)}'
                         '${sets[i].unit}',
                         style: theme.textTheme.labelSmall,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),

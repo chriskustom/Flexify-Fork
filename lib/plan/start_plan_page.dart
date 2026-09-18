@@ -992,7 +992,6 @@ class _StartPlanPageState extends State<StartPlanPage>
       count = gymCount.count;
       max = gymCount.maxSets ?? maxSets;
     }
-
     final iconColor = index == expandedIndex
         ? Theme.of(context).colorScheme.primary
         : Colors.white;
@@ -1013,6 +1012,7 @@ class _StartPlanPageState extends State<StartPlanPage>
               dividerColor: Colors.transparent,
             ),
             child: ExpansionTile(
+              tilePadding: EdgeInsets.all(2),
               initiallyExpanded: index == 0,
               controller: controllers.putIfAbsent(
                 index,
@@ -1036,10 +1036,14 @@ class _StartPlanPageState extends State<StartPlanPage>
                 } else if (expandedIndex == index) {
                   expandedIndex = null;
                 }
+                setState(() {});
               },
               title: _buildExerciseTitle(
                 exercise.exercise,
                 iconColor,
+                count,
+                max,
+                index,
               ),
               children: [
                 if (!cardio)
@@ -1049,18 +1053,18 @@ class _StartPlanPageState extends State<StartPlanPage>
                 if (cardio) ...cardioFields(snapshot),
                 unitSelector(),
                 notesField(),
+                const SizedBox(height: 4),
+                StreamBuilder<List<GymSet>>(
+                  stream: _todaySetsStream(exercise.exercise),
+                  builder: (context, snapshot) {
+                    return CustomSetIndicator(
+                      sets: snapshot.data ?? const [],
+                      max: max,
+                    );
+                  },
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 4),
-          StreamBuilder<List<GymSet>>(
-            stream: _todaySetsStream(exercise.exercise),
-            builder: (context, snapshot) {
-              return CustomSetIndicator(
-                sets: snapshot.data ?? const [],
-                max: max,
-              );
-            },
           ),
           const SizedBox(height: 4),
         ],
@@ -1071,6 +1075,9 @@ class _StartPlanPageState extends State<StartPlanPage>
   Widget _buildExerciseTitle(
     String exercise,
     Color iconColor,
+    int count,
+    int max,
+    int index,
   ) {
     return Row(
       children: [
@@ -1082,21 +1089,31 @@ class _StartPlanPageState extends State<StartPlanPage>
             borderRadius: BorderRadius.circular(12),
           ),
           child: Center(
-            child: Text(
-              exercise[0].toUpperCase(),
-              style: TextStyle(
-                color: iconColor,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'monospace',
-              ),
-            ),
+            child: count == max
+                ? Icon(
+                    Icons.check,
+                    color: iconColor,
+                  )
+                : Text(
+                    exercise[0].toUpperCase(),
+                    style: TextStyle(
+                      color: iconColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
           ),
         ),
         const SizedBox(width: 8),
-        Flexible(
-          child: Text(exercise),
+        Expanded(
+          child: Text(
+            exercise,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
+        const SizedBox(width: 8),
+        if (controllers[index]?.isExpanded == false) ..._buildBlips(max, count),
       ],
     );
   }
@@ -1138,6 +1155,40 @@ class _StartPlanPageState extends State<StartPlanPage>
       case PlanTrailing.none:
         return const SizedBox.shrink();
     }
+  }
+
+  List<Widget> _buildBlips(int max, int count) {
+    List<Widget> items = [];
+    for (int i = 0; i < max; i++) {
+      items.add(
+        SizedBox(
+          width: 10,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(2),
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
+            height: 4,
+            child: AnimatedFractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: count > i ? 1 : 0,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.ease,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(2),
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      if (i < max - 1) {
+        items.add(const SizedBox(width: 6));
+      }
+    }
+    return items;
   }
 
   Future<void> _showExerciseModal(
