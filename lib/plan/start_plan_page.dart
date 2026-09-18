@@ -1,7 +1,14 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart'
+    show
+        OrderingTerm,
+        OrderingMode,
+        TableOrViewStatements,
+        Value,
+        BooleanExpressionOperators,
+        QueryTableExtensions;
 import 'package:flexify/animated_fab.dart';
 import 'package:flexify/constants.dart';
 import 'package:flexify/custom_set_indicator.dart';
@@ -18,17 +25,19 @@ import 'package:flexify/settings/settings_state.dart';
 import 'package:flexify/timer/timer_state.dart';
 import 'package:flexify/utils.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' as material;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class StartPlanPage extends StatefulWidget {
+  const StartPlanPage({
+    super.key,
+    required this.plan,
+  });
+
   final Plan plan;
 
-  const StartPlanPage({super.key, required this.plan});
-
   @override
-  createState() => _StartPlanPageState();
+  State<StartPlanPage> createState() => _StartPlanPageState();
 }
 
 typedef Tapped = ({
@@ -36,77 +45,97 @@ typedef Tapped = ({
   DateTime dateTime,
 });
 
-class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserver {
-  final reps = TextEditingController(text: "0.0");
-  final weight = TextEditingController(text: "0.0");
-  final notes = TextEditingController(text: "");
-  final distance = TextEditingController(text: "0.0");
-  final minutes = TextEditingController(text: "0.0");
-  final seconds = TextEditingController(text: "0.0");
-  final incline = TextEditingController(text: "0");
-  final key = GlobalKey<FormState>();
+class _StartPlanPageState extends State<StartPlanPage>
+    with WidgetsBindingObserver {
+  // ---------------------------------------------------------------------------
+  // Controllers
+  // ---------------------------------------------------------------------------
+
+  final reps = TextEditingController(text: '0.0');
+  final weight = TextEditingController(text: '0.0');
+  final notes = TextEditingController();
+  final distance = TextEditingController(text: '0.0');
+  final minutes = TextEditingController(text: '0.0');
+  final seconds = TextEditingController(text: '0.0');
+  final incline = TextEditingController(text: '0');
+
+  final formKey = GlobalKey<FormState>();
+
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
 
   int selected = 0;
   bool cardio = false;
+
   DateTime? lastSaved;
   List<Rpm>? rpms;
+
   String? category;
   String? image;
   String? currentExercise;
 
   late Stream<List<PlanExercise>> stream;
-  late PlanState planState = context.read<PlanState>();
-  late String unit = 'kg';
-  late String title = widget.plan.days.replaceAll(",", ", ");
+  late PlanState planState;
+  late String unit;
+  late String title;
 
-  Tapped lastTap = (index: 0, dateTime: DateTime(0));
+  Tapped lastTap = (
+    index: 0,
+    dateTime: DateTime(0),
+  );
+
   int? expandedIndex = 0;
+
   final Map<int, ExpansibleController> controllers = {};
+
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
 
   @override
   void initState() {
     super.initState();
-    planState.addListener(planChanged);
-    WidgetsBinding.instance.addObserver(this);
 
     planState = context.read<PlanState>();
-    title = widget.plan.title?.isNotEmpty == true ? widget.plan.title! : widget.plan.days.replaceAll(",", ", ");
+    unit = 'kg';
+    title = widget.plan.days.replaceAll(',', ', ');
+
+    planState.addListener(planChanged);
+    WidgetsBinding.instance.addObserver(this);
 
     _loadExercises();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (controllers[0] != null) {
-        setState(() {
-          controllers[0]!.expand();
-        });
-      }
+      final controller = controllers[0];
+
+      if (controller == null || !mounted) return;
+
+      setState(controller.expand);
     });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state != AppLifecycleState.resumed) return;
-    if (rpms == null || !mounted || lastSaved == null) return;
+
+    if (state != AppLifecycleState.resumed ||
+        rpms == null ||
+        !mounted ||
+        lastSaved == null) {
+      return;
+    }
 
     final settings = context.read<SettingsState>().value;
     final difference = DateTime.now().difference(lastSaved!);
 
     if (cardio && settings.durationEstimation) {
-      minutes.text = difference.inMinutes.toString();
-      seconds.text = (difference.inSeconds % 60).toString();
-    } else if (!cardio && settings.repEstimation) {
-      final parsedWeight = double.parse(weight.text);
-      stream.first.then((planExercises) {
-        final closestRpm = rpms!.where((rpm) => rpm.name == planExercises[selected].exercise).reduce(
-              (rpm1, rpm2) => (rpm1.weight - parsedWeight).abs() < (rpm2.weight - parsedWeight).abs() ? rpm1 : rpm2,
-            );
+      _estimateCardioDuration(difference);
+      return;
+    }
 
-        final estimatedReps = (difference.inMinutes * closestRpm.rpm).clamp(1, 50);
-        if (estimatedReps <= 0) return;
-
-        reps.text = estimatedReps.toInt().toString();
-      });
+    if (!cardio && settings.repEstimation) {
+      _estimateReps(difference);
     }
   }
 
@@ -126,132 +155,118 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
     super.dispose();
   }
 
-  Future<void> _loadExercises() async {
-    setState(() {
-      stream = (db.planExercises.select()
-            ..where(
-              (pe) => pe.planId.equals(widget.plan.id) & pe.enabled,
-            )
-            ..orderBy(
-              [
-                (u) => OrderingTerm(
-                      expression: u.sequence,
-                      mode: OrderingMode.asc,
-                    ),
-              ],
-            ))
-          .watch();
-    });
+  // ---------------------------------------------------------------------------
+  // Loading
+  // ---------------------------------------------------------------------------
 
-    select(0);
+  Future<void> _loadExercises() async {
+    stream = (db.planExercises.select()
+          ..where(
+            (pe) => pe.planId.equals(widget.plan.id) & pe.enabled,
+          )
+          ..orderBy([
+            (pe) => OrderingTerm(
+                  expression: pe.sequence,
+                  mode: OrderingMode.asc,
+                ),
+          ]))
+        .watch();
+
+    await select(0);
+
     if (!mounted) return;
+
     final settings = context.read<SettingsState>().value;
+
     if (settings.repEstimation) {
-      getRpms().then((value) => setState(() => rpms = value));
+      getRpms().then((value) {
+        if (!mounted) return;
+        setState(() => rpms = value);
+      });
     }
 
-    if (settings.strengthUnit != 'last-entry' && !cardio) {
+    if (!cardio && settings.strengthUnit != 'last-entry') {
       setState(() => unit = settings.strengthUnit);
-    } else if (settings.cardioUnit != 'last-entry' && cardio) {
+    } else if (cardio && settings.cardioUnit != 'last-entry') {
       setState(() => unit = settings.cardioUnit);
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Estimation
+  // ---------------------------------------------------------------------------
+
+  void _estimateCardioDuration(Duration difference) {
+    minutes.text = difference.inMinutes.toString();
+    seconds.text = (difference.inSeconds % 60).toString();
+  }
+
+  Future<void> _estimateReps(Duration difference) async {
+    final parsedWeight = double.parse(weight.text);
+    final planExercises = await stream.first;
+
+    if (!mounted || rpms == null || planExercises.isEmpty) return;
+
+    final exercise = planExercises[selected].exercise;
+
+    final matchingRpms = rpms!.where((rpm) => rpm.name == exercise).toList();
+
+    if (matchingRpms.isEmpty) return;
+
+    final closestRpm = matchingRpms.reduce(
+      (rpm1, rpm2) => (rpm1.weight - parsedWeight).abs() <
+              (rpm2.weight - parsedWeight).abs()
+          ? rpm1
+          : rpm2,
+    );
+
+    final estimatedReps = (difference.inMinutes * closestRpm.rpm).clamp(1, 50);
+
+    if (estimatedReps <= 0) return;
+
+    reps.text = estimatedReps.toInt().toString();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
-    if (widget.plan.title?.isNotEmpty == true) title = widget.plan.title!;
+    if (widget.plan.title?.isNotEmpty == true) {
+      title = widget.plan.title!;
+    }
+
     planState = context.watch<PlanState>();
 
-    return material.StreamBuilder(
+    return StreamBuilder<List<PlanExercise>>(
       stream: stream,
       builder: (context, snapshot) {
-        if (snapshot.data == null) return SizedBox();
-        for (var e in snapshot.data!) {
-          print('${snapshot.data!.indexOf(e)} - ${e.exercise}');
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final exercises = snapshot.data!;
+
+        for (var index = 0; index < exercises.length; index++) {
           controllers.putIfAbsent(
-            snapshot.data!.indexOf(e),
-            () => ExpansibleController(),
+            index,
+            ExpansibleController.new,
           );
         }
+
         return Scaffold(
           resizeToAvoidBottomInset: false,
-          appBar: AppBar(
-            title: Text(title),
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: () => Navigator.pop(context),
-            ),
-            actions: [
-              if (currentExercise != null) ...[
-                IconButton(
-                  tooltip: 'History',
-                  onPressed: () async {
-                    final gymSets = await (db.gymSets.select()
-                          ..orderBy(
-                            [
-                              (u) => OrderingTerm(
-                                    expression: u.created,
-                                    mode: OrderingMode.desc,
-                                  ),
-                            ],
-                          )
-                          ..where((tbl) => tbl.name.equals(currentExercise!))
-                          ..where((tbl) => tbl.hidden.equals(false))
-                          ..limit(20))
-                        .get();
-                    gymSets.sort((a, b) => b.created.compareTo(a.created));
-                    if (!context.mounted) return;
-                    setState(() {
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        builder: (context) {
-                          return FractionallySizedBox(
-                            heightFactor: .8,
-                            widthFactor: .8,
-                            child: Container(
-                              clipBehavior: material.Clip.antiAlias,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surface,
-                                borderRadius: BorderRadius.vertical(
-                                  top: Radius.circular(24),
-                                ),
-                              ),
-                              child: GraphHistoryPage(
-                                name: currentExercise!,
-                                gymSets: gymSets,
-                                peek: true,
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    });
-                  },
-                  icon: const Icon(Icons.history),
-                ),
-              ],
-              IconButton(
-                onPressed: () async {
-                  final plan = await (db.plans.select()..whereSamePrimaryKey(widget.plan)).getSingle();
-                  await planState.setExercises(plan.toCompanion(false));
-                  if (!context.mounted) return;
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EditPlanPage(plan: plan.toCompanion(false)),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.edit),
-              ),
-            ],
-          ),
+          appBar: _buildAppBar(context),
           body: Padding(
-            padding: const EdgeInsets.only(left: 16.0, right: 16, bottom: 104),
+            padding: const EdgeInsets.only(
+              left: 16,
+              right: 16,
+              bottom: 104,
+            ),
             child: Form(
-              key: key,
-              child: material.Column(
+              key: formKey,
+              child: Column(
                 children: [
                   Expanded(
                     child: _buildPlanList(context, snapshot),
@@ -261,8 +276,8 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
             ),
           ),
           floatingActionButton: AnimatedFab(
-            onPressed: () async => await save(snapshot),
-            label: const Text("Save"),
+            onPressed: () => save(snapshot),
+            label: const Text('Save'),
             icon: const Icon(Icons.save),
           ),
         );
@@ -270,57 +285,129 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
     );
   }
 
-  List<Widget> strengthFields(AsyncSnapshot<List<PlanExercise>> snapshot) {
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    return AppBar(
+      title: Text(title),
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back),
+        onPressed: () => Navigator.pop(context),
+      ),
+      actions: [
+        if (currentExercise != null)
+          IconButton(
+            tooltip: 'History',
+            icon: const Icon(Icons.history),
+            onPressed: _showHistory,
+          ),
+        IconButton(
+          icon: const Icon(Icons.edit),
+          onPressed: _editPlan,
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // History / Plan editing
+  // ---------------------------------------------------------------------------
+
+  Future<void> _showHistory() async {
+    final exercise = currentExercise;
+    if (exercise == null) return;
+
+    final gymSets = await (db.gymSets.select()
+          ..orderBy([
+            (u) => OrderingTerm(
+                  expression: u.created,
+                  mode: OrderingMode.desc,
+                ),
+          ])
+          ..where((tbl) => tbl.name.equals(exercise))
+          ..where((tbl) => tbl.hidden.equals(false))
+          ..limit(20))
+        .get();
+
+    gymSets.sort((a, b) => b.created.compareTo(a.created));
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return FractionallySizedBox(
+          heightFactor: 0.8,
+          widthFactor: 0.8,
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+            ),
+            child: GraphHistoryPage(
+              name: exercise,
+              gymSets: gymSets,
+              peek: true,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _editPlan() async {
+    final plan =
+        await (db.plans.select()..whereSamePrimaryKey(widget.plan)).getSingle();
+
+    await planState.setExercises(plan.toCompanion(false));
+
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditPlanPage(
+          plan: plan.toCompanion(false),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fields
+  // ---------------------------------------------------------------------------
+
+  List<Widget> strengthFields(
+    AsyncSnapshot<List<PlanExercise>> snapshot,
+  ) {
     return [
       Expanded(
         child: TextFormField(
           controller: reps,
           decoration: const InputDecoration(labelText: 'Reps'),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          keyboardType: const TextInputType.numberWithOptions(
+            decimal: true,
+          ),
           textInputAction: TextInputAction.next,
-          onFieldSubmitted: (value) => selectAll(weight),
+          onFieldSubmitted: (_) => selectAll(weight),
           onTap: () => selectAll(reps),
-          validator: (value) {
-            if (value == null || value.isEmpty) return 'Required';
-            if (double.tryParse(value) == null) return 'Invalid number';
-            return null;
-          },
+          validator: _requiredNumberValidator,
         ),
       ),
-      SizedBox(
-        width: 8,
-      ),
+      const SizedBox(width: 8),
       Expanded(
-        child: TextFormField(
-          controller: weight,
-          decoration: InputDecoration(
-            labelText: 'Weight ($unit)',
-            suffixIcon: Selector<SettingsState, bool>(
-              selector: (context, settings) => settings.value.showBodyWeight,
-              builder: (context, showBodyWeight, child) => Visibility(
-                visible: showBodyWeight,
-                child: IconButton(
-                  tooltip: "Use body weight",
-                  icon: const Icon(Icons.scale),
-                  onPressed: useBodyWeight,
-                ),
-              ),
-            ),
-          ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          onTap: () => selectAll(weight),
-          onFieldSubmitted: (value) async => await save(snapshot),
-          validator: (value) {
-            if (value == null || value.isEmpty) return 'Required';
-            if (double.tryParse(value) == null) return 'Invalid number';
-            return null;
-          },
+        child: _weightField(
+          onFieldSubmitted: (_) => save(snapshot),
         ),
       ),
     ];
   }
 
-  List<Widget> cardioFields(AsyncSnapshot<List<PlanExercise>> snapshot) {
+  List<Widget> cardioFields(
+    AsyncSnapshot<List<PlanExercise>> snapshot,
+  ) {
     return [
       Row(
         children: [
@@ -328,92 +415,47 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
             child: TextFormField(
               controller: minutes,
               decoration: const InputDecoration(labelText: 'Minutes'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: false),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: false,
+              ),
               onTap: () => selectAll(minutes),
               textInputAction: TextInputAction.next,
-              onFieldSubmitted: (value) => selectAll(seconds),
-              validator: (value) {
-                if (value?.isNotEmpty == true && int.tryParse(value!) == null) return 'Invalid number';
-                return null;
-              },
+              onFieldSubmitted: (_) => selectAll(seconds),
+              validator: _optionalIntegerValidator,
             ),
           ),
-          const SizedBox(width: 8.0),
+          const SizedBox(width: 8),
           Expanded(
             child: TextFormField(
               controller: seconds,
               decoration: const InputDecoration(labelText: 'Seconds'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: false),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: false,
+              ),
               onTap: () => selectAll(seconds),
               textInputAction: TextInputAction.next,
-              onFieldSubmitted: (value) => selectAll(distance),
-              validator: (value) {
-                if (value?.isNotEmpty == true && int.tryParse(value!) == null) return 'Invalid number';
-                return null;
-              },
+              onFieldSubmitted: (_) => selectAll(distance),
+              validator: _optionalIntegerValidator,
             ),
           ),
         ],
       ),
       Row(
         children: [
-          if (unit == 'kg' || unit == 'lb' || unit == 'stone')
-            material.Expanded(
-              child: TextFormField(
-                controller: weight,
-                decoration: InputDecoration(
-                  labelText: 'Weight ($unit)',
-                  suffixIcon: Selector<SettingsState, bool>(
-                    selector: (context, settings) => settings.value.showBodyWeight,
-                    builder: (context, showBodyWeight, child) => Visibility(
-                      visible: showBodyWeight,
-                      child: IconButton(
-                        tooltip: "Use body weight",
-                        icon: const Icon(Icons.scale),
-                        onPressed: useBodyWeight,
-                      ),
-                    ),
-                  ),
-                ),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onTap: () => selectAll(weight),
-                onFieldSubmitted: (value) async => await save(snapshot),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Required';
-                  if (double.tryParse(value) == null) return 'Invalid number';
-                  return null;
-                },
-              ),
-            )
-          else
-            Expanded(
-              child: TextFormField(
-                textInputAction: TextInputAction.next,
-                controller: distance,
-                decoration: const InputDecoration(labelText: 'Distance'),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onFieldSubmitted: (value) => selectAll(incline),
-                onTap: () => selectAll(distance),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return null;
-                  if (double.tryParse(value) == null) return 'Invalid number';
-                  return null;
-                },
-              ),
-            ),
-          const SizedBox(width: 8.0),
+          Expanded(
+            child: _cardioPrimaryField(),
+          ),
+          const SizedBox(width: 8),
           Expanded(
             child: TextFormField(
               controller: incline,
               decoration: const InputDecoration(labelText: 'Incline %'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               onTap: () => selectAll(incline),
-              onFieldSubmitted: (value) => save(snapshot),
-              validator: (value) {
-                if (value == null || value.isEmpty) return null;
-                if (double.tryParse(value) == null) return 'Invalid number';
-                return null;
-              },
+              onFieldSubmitted: (_) => save(snapshot),
+              validator: _optionalNumberValidator,
             ),
           ),
         ],
@@ -421,39 +463,131 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
     ];
   }
 
-  Widget unitSelector() {
-    return Selector<SettingsState, bool>(
-      selector: (context, settings) => settings.value.showUnits,
-      builder: (context, showUnits, child) => Visibility(
-        visible: showUnits,
-        child: DropdownButtonFormField<String>(
-          decoration: const InputDecoration(labelText: 'Unit'),
-          initialValue: unit,
-          items: _getUnitItems(),
-          onChanged: (String? newValue) {
-            setState(() {
-              unit = newValue!;
-            });
+  Widget _cardioPrimaryField() {
+    if (unit == 'kg' || unit == 'lb' || unit == 'stone') {
+      return _weightField(
+        onFieldSubmitted: (_) {},
+      );
+    }
+
+    return TextFormField(
+      textInputAction: TextInputAction.next,
+      controller: distance,
+      decoration: const InputDecoration(labelText: 'Distance'),
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+      ),
+      onFieldSubmitted: (_) => selectAll(incline),
+      onTap: () => selectAll(distance),
+      validator: _optionalNumberValidator,
+    );
+  }
+
+  Widget _weightField({
+    required void Function(String) onFieldSubmitted,
+  }) {
+    return TextFormField(
+      controller: weight,
+      decoration: InputDecoration(
+        labelText: 'Weight ($unit)',
+        suffixIcon: Selector<SettingsState, bool>(
+          selector: (context, settings) => settings.value.showBodyWeight,
+          builder: (context, showBodyWeight, child) {
+            if (!showBodyWeight) {
+              return const SizedBox.shrink();
+            }
+
+            return IconButton(
+              tooltip: 'Use body weight',
+              icon: const Icon(Icons.scale),
+              onPressed: useBodyWeight,
+            );
           },
         ),
       ),
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+      ),
+      onTap: () => selectAll(weight),
+      onFieldSubmitted: onFieldSubmitted,
+      validator: _requiredNumberValidator,
+    );
+  }
+
+  String? _requiredNumberValidator(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Required';
+    }
+
+    if (double.tryParse(value) == null) {
+      return 'Invalid number';
+    }
+
+    return null;
+  }
+
+  String? _optionalNumberValidator(String? value) {
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+
+    if (double.tryParse(value) == null) {
+      return 'Invalid number';
+    }
+
+    return null;
+  }
+
+  String? _optionalIntegerValidator(String? value) {
+    if (value?.isNotEmpty == true && int.tryParse(value!) == null) {
+      return 'Invalid number';
+    }
+
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Unit / Notes
+  // ---------------------------------------------------------------------------
+
+  Widget unitSelector() {
+    return Selector<SettingsState, bool>(
+      selector: (context, settings) => settings.value.showUnits,
+      builder: (context, showUnits, child) {
+        if (!showUnits) {
+          return const SizedBox.shrink();
+        }
+
+        return DropdownButtonFormField<String>(
+          decoration: const InputDecoration(labelText: 'Unit'),
+          initialValue: unit,
+          items: _getUnitItems(),
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() => unit = value);
+          },
+        );
+      },
     );
   }
 
   Widget notesField() {
     return Selector<SettingsState, bool>(
       selector: (context, settings) => settings.value.showNotes,
-      builder: (context, showNotes, child) => Visibility(
-        visible: showNotes,
-        child: TextFormField(
+      builder: (context, showNotes, child) {
+        if (!showNotes) {
+          return const SizedBox.shrink();
+        }
+
+        return TextFormField(
           controller: notes,
           maxLines: 3,
           decoration: const InputDecoration(
             labelText: 'Notes',
             border: InputBorder.none,
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -461,38 +595,42 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
     return const [
       DropdownMenuItem(
         value: 'kg',
-        child: Text("Kilograms (kg)"),
+        child: Text('Kilograms (kg)'),
       ),
       DropdownMenuItem(
         value: 'lb',
-        child: Text("Pounds (lb)"),
+        child: Text('Pounds (lb)'),
       ),
       DropdownMenuItem(
         value: 'stone',
-        child: Text("Stone"),
+        child: Text('Stone'),
       ),
       DropdownMenuItem(
         value: 'km',
-        child: Text("Kilometers (km)"),
+        child: Text('Kilometers (km)'),
       ),
       DropdownMenuItem(
         value: 'mi',
-        child: Text("Miles (mi)"),
+        child: Text('Miles (mi)'),
       ),
       DropdownMenuItem(
         value: 'm',
-        child: Text("Meters (m)"),
+        child: Text('Meters (m)'),
       ),
       DropdownMenuItem(
         value: 'kcal',
-        child: Text("Kilocalories (kcal)"),
+        child: Text('Kilocalories (kcal)'),
       ),
     ];
   }
 
-  Future<GymSet?> getLast(String exercise) async {
+  // ---------------------------------------------------------------------------
+  // Gym sets
+  // ---------------------------------------------------------------------------
+
+  Future<GymSet?> getLast(String exercise) {
     return (db.gymSets.select()
-          ..where((tbl) => db.gymSets.name.equals(exercise))
+          ..where((tbl) => tbl.name.equals(exercise))
           ..orderBy([
             (u) => OrderingTerm(
                   expression: u.created,
@@ -505,55 +643,73 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
 
   void _updateGymSetTextFields(GymSet gymSet) {
     final settings = context.read<SettingsState>().value;
-    if (settings.strengthUnit == 'last-entry' && !gymSet.cardio || settings.cardioUnit == 'last-entry' && gymSet.cardio)
+
+    if ((!gymSet.cardio && settings.strengthUnit == 'last-entry') ||
+        (gymSet.cardio && settings.cardioUnit == 'last-entry')) {
       unit = gymSet.unit;
-    else if (gymSet.cardio)
+    } else if (gymSet.cardio) {
       unit = settings.cardioUnit;
-    else
+    } else {
       unit = settings.strengthUnit;
+    }
 
     reps.text = toString(gymSet.reps);
     weight.text = toString(gymSet.weight);
     distance.text = toString(gymSet.distance);
     minutes.text = gymSet.duration.floor().toString();
     seconds.text = ((gymSet.duration * 60) % 60).floor().toString();
-    incline.text = gymSet.incline?.toString() ?? "";
+    incline.text = gymSet.incline?.toString() ?? '';
     cardio = gymSet.cardio;
     category = gymSet.category;
     image = gymSet.image;
-    notes.text = gymSet.notes ?? "";
+    notes.text = gymSet.notes ?? '';
     currentExercise = gymSet.name;
   }
 
+  // ---------------------------------------------------------------------------
+  // Plan changes
+  // ---------------------------------------------------------------------------
+
   void planChanged() {
-    final index = planState.plans.indexWhere((plan) => plan.id == widget.plan.id);
-    if (index == -1) return Navigator.pop(context);
+    final index = planState.plans.indexWhere(
+      (plan) => plan.id == widget.plan.id,
+    );
+
+    if (index == -1) {
+      Navigator.pop(context);
+      return;
+    }
+
+    if (!mounted) return;
 
     final plan = planState.plans[index];
 
-    if (!mounted) return;
     setState(() {
       title = plan.days.replaceAll(',', ', ');
     });
   }
 
-  Future<void> save(AsyncSnapshot<List<PlanExercise>> snapshot) async {
-    if (!key.currentState!.validate()) return;
+  // ---------------------------------------------------------------------------
+  // Save
+  // ---------------------------------------------------------------------------
+
+  Future<void> save(
+    AsyncSnapshot<List<PlanExercise>> snapshot,
+  ) async {
+    if (!(formKey.currentState?.validate() ?? false)) {
+      return;
+    }
 
     if (!mounted) return;
 
     final exercise = snapshot.data![selected].exercise;
-    double? bodyWeight;
     final settings = context.read<SettingsState>().value;
-    if (settings.showBodyWeight) {
-      bodyWeight = (await getBodyWeight())?.weight;
-    }
-    if (settings.showBodyWeight && bodyWeight == null) {
-      final lastSet = await getLast(exercise);
-      bodyWeight = lastSet?.bodyWeight;
-    }
 
-    if (!settings.explainedPermissions && settings.restTimers && !kIsWeb && mounted) {
+    final bodyWeight = await _getBodyWeight(exercise, settings);
+
+    if (!mounted) return;
+
+    if (!settings.explainedPermissions && settings.restTimers && !kIsWeb) {
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -563,28 +719,35 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
     }
 
     if (!mounted) return;
-    final counts = planState.gymCounts;
-    final index = counts.indexWhere((element) => element.name == exercise);
 
-    int? max;
+    final counts = planState.gymCounts;
+    final countIndex = counts.indexWhere(
+      (element) => element.name == exercise,
+    );
+
+    int? maxSets;
     double? restMs;
     int? warmupSets;
-    bool peTimers = true;
-    if (index != -1) {
-      max = counts[index].maxSets;
-      restMs = counts[index].restMs?.toDouble();
-      warmupSets = counts[index].warmupSets;
-      peTimers = counts[index].timers;
+    var peTimers = true;
+
+    if (countIndex != -1) {
+      final count = counts[countIndex];
+
+      maxSets = count.maxSets;
+      restMs = count.restMs?.toDouble();
+      warmupSets = count.warmupSets;
+      peTimers = count.timers;
     }
 
-    var gymSetInsert = GymSetsCompanion.insert(
+    var count = countIndex == -1 ? 0 : counts[countIndex].count;
+    count++;
+
+    final gymSetInsert = GymSetsCompanion.insert(
       name: exercise,
       unit: unit,
       created: DateTime.now().toLocal(),
       cardio: Value(cardio),
-      duration: Value(
-        (int.tryParse(seconds.text) ?? 0) / 60 + (int.tryParse(minutes.text) ?? 0),
-      ),
+      duration: Value(_durationInMinutes()),
       bodyWeight: Value.absentIfNull(bodyWeight),
       restMs: Value(restMs?.toInt()),
       planId: Value(widget.plan.id),
@@ -597,109 +760,204 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
       notes: Value(notes.text),
     );
 
-    var count = 0;
-    if (index != -1) count = counts[index].count;
-    count++;
+    final finishedSetCount = count == (maxSets ?? settings.maxSets);
 
-    final finishedPlan = count == (max ?? settings.maxSets) && selected == snapshot.data!.length - 1;
+    final finishedPlan =
+        finishedSetCount && selected == snapshot.data!.length - 1;
+
     final isWarmup = count <= (warmupSets ?? settings.warmupSets ?? 0);
+
     restMs ??= settings.timerDuration.toDouble();
 
     if (!finishedPlan && !isWarmup && settings.restTimers && peTimers) {
-      final timerState = context.read<TimerState>();
-      timerState.startTimer(
-        "$exercise ($count)",
-        Duration(milliseconds: restMs.toInt()),
-        settings.alarmSound,
-        settings.vibrate,
-      );
+      context.read<TimerState>().startTimer(
+            '$exercise ($count)',
+            Duration(milliseconds: restMs.toInt()),
+            settings.alarmSound,
+            settings.vibrate,
+          );
     }
 
-    final finishedExercise = count == (max ?? settings.maxSets) && selected < snapshot.data!.length - 1;
+    final finishedExercise =
+        finishedSetCount && selected < snapshot.data!.length - 1;
 
-    var gymSet = await db.into(db.gymSets).insertReturning(gymSetInsert);
+    final gymSet = await db.into(db.gymSets).insertReturning(gymSetInsert);
+
     await planState.updateGymCounts(widget.plan.id);
     await planState.updateDefaults();
+
     if (settings.planTrailing == 'PlanTrailing.count' ||
         settings.planTrailing == 'PlanTrailing.ratio' ||
-        settings.planTrailing == 'PlanTrailing.percent') planState.updatePlanCounts();
+        settings.planTrailing == 'PlanTrailing.percent') {
+      planState.updatePlanCounts();
+    }
+
     if (!mounted) return;
+
     setState(() {
       _updateGymSetTextFields(gymSet);
       lastSaved = DateTime.now();
     });
-    if (finishedExercise) await select(selected + 1);
+
+    if (finishedExercise) {
+      await select(selected + 1);
+      controllers[selected]?.expand();
+    }
 
     if (!settings.notifications) return;
 
     final best = await isBest(gymSet);
-    if (!best) return;
+
+    if (!best || !mounted) return;
+
     final random = Random();
-    final randomMessage = positiveReinforcement[random.nextInt(positiveReinforcement.length)];
-    if (mounted && random.nextDouble() < 0.3) toast(randomMessage);
-  }
 
-  Future<void> select(int index) async {
-    setState(() => selected = index);
-    final first = await stream.first;
-    final last = await getLast(first[index].exercise);
-    if (last == null || !mounted) return;
-    setState(() => _updateGymSetTextFields(last));
-  }
+    if (random.nextDouble() < 0.3) {
+      final message = positiveReinforcement[random.nextInt(
+        positiveReinforcement.length,
+      )];
 
-  void useBodyWeight() async {
-    final weightSet = await getBodyWeight();
-    if (!mounted) return;
-    if (weightSet == null) {
-      toast('No weight entered yet');
-    } else {
-      weight.text = toString(weightSet.weight);
+      toast(message);
     }
   }
 
-  void tap(int index, List<GymCount> counts, String exercise) async {
-    select(index);
-    final count = counts.elementAtOrNull(index);
-    if (count == null) return;
-    if (counts.elementAtOrNull(index)?.count == 0) return;
+  double _durationInMinutes() {
+    return (int.tryParse(seconds.text) ?? 0) / 60 +
+        (int.tryParse(minutes.text) ?? 0);
+  }
 
-    if (DateTime.now().difference(lastTap.dateTime) >= const Duration(milliseconds: 300) || index != lastTap.index)
-      return setState(() {
-        lastTap = (index: index, dateTime: DateTime.now());
+  Future<double?> _getBodyWeight(
+    String exercise,
+    dynamic settings,
+  ) async {
+    if (!settings.showBodyWeight) {
+      return null;
+    }
+
+    final current = await getBodyWeight();
+
+    if (current != null) {
+      return current.weight;
+    }
+
+    final lastSet = await getLast(exercise);
+    return lastSet?.bodyWeight;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Selection / interaction
+  // ---------------------------------------------------------------------------
+
+  Future<void> select(int index) async {
+    setState(() => selected = index);
+
+    final exercises = await stream.first;
+    final last = await getLast(exercises[index].exercise);
+
+    if (last == null || !mounted) return;
+
+    setState(() {
+      _updateGymSetTextFields(last);
+    });
+  }
+
+  Future<void> useBodyWeight() async {
+    final weightSet = await getBodyWeight();
+
+    if (!mounted) return;
+
+    if (weightSet == null) {
+      toast('No weight entered yet');
+      return;
+    }
+
+    weight.text = toString(weightSet.weight);
+  }
+
+  Future<void> tap(
+    int index,
+    List<GymCount> counts,
+    String exercise,
+  ) async {
+    await select(index);
+
+    final count = counts.elementAtOrNull(index);
+
+    if (count == null || count.count == 0) return;
+
+    final now = DateTime.now();
+
+    if (now.difference(lastTap.dateTime) >= const Duration(milliseconds: 300) ||
+        index != lastTap.index) {
+      setState(() {
+        lastTap = (
+          index: index,
+          dateTime: now,
+        );
       });
+
+      return;
+    }
 
     final gymSet = await (db.gymSets.select()
           ..where((tbl) => tbl.name.equals(exercise))
-          ..orderBy(
-            [
-              (u) => OrderingTerm(expression: u.created, mode: OrderingMode.desc),
-            ],
-          )
+          ..orderBy([
+            (u) => OrderingTerm(
+                  expression: u.created,
+                  mode: OrderingMode.desc,
+                ),
+          ])
           ..limit(1))
         .getSingle();
+
     if (!mounted) return;
 
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => EditSetPage(gymSet: gymSet)),
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => EditSetPage(
+          gymSet: gymSet,
+        ),
+      ),
     );
   }
 
-  Widget _buildPlanList(BuildContext context, AsyncSnapshot<List<PlanExercise>> snapshot) {
+  // ---------------------------------------------------------------------------
+  // Plan list
+  // ---------------------------------------------------------------------------
+
+  Widget _buildPlanList(
+    BuildContext context,
+    AsyncSnapshot<List<PlanExercise>> snapshot,
+  ) {
     final exercises = snapshot.data!;
-    final max = context.select<SettingsState, int>((settings) => settings.value.maxSets);
+
+    final maxSets = context.select<SettingsState, int>(
+      (settings) => settings.value.maxSets,
+    );
+
     final trailing = context.select<SettingsState, PlanTrailing>(
       (settings) => PlanTrailing.values.byName(
-        settings.value.planTrailing.replaceFirst('PlanTrailing.', ''),
+        settings.value.planTrailing.replaceFirst(
+          'PlanTrailing.',
+          '',
+        ),
       ),
     );
-    final state = context.watch<PlanState>();
-    final counts = state.gymCounts;
 
-    if (trailing == PlanTrailing.reorder)
+    final counts = context.watch<PlanState>().gymCounts;
+
+    if (trailing == PlanTrailing.reorder) {
       return ReorderableListView.builder(
         itemCount: exercises.length,
         padding: const EdgeInsets.only(bottom: 76),
-        itemBuilder: (context, index) => itemBuilder(context, snapshot, index, max, trailing, counts),
+        itemBuilder: (context, index) => _buildExerciseItem(
+          context,
+          snapshot,
+          index,
+          maxSets,
+          trailing,
+          counts,
+        ),
         onReorder: (oldIndex, newIndex) async {
           if (oldIndex < newIndex) {
             newIndex--;
@@ -712,27 +970,39 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
             for (var i = 0; i < exercises.length; i++) {
               batch.update(
                 db.planExercises,
-                PlanExercisesCompanion(sequence: Value(i)),
+                PlanExercisesCompanion(
+                  sequence: Value(i),
+                ),
                 where: (pe) => pe.id.equals(exercises[i].id),
               );
             }
           });
 
           if (!context.mounted) return;
+
           final state = context.read<PlanState>();
+
           state.setExercises(widget.plan.toCompanion(false));
           state.updatePlans(null);
         },
       );
-    else
-      return ListView.builder(
-        padding: const EdgeInsets.only(bottom: 76),
-        itemCount: exercises.length,
-        itemBuilder: (context, index) => itemBuilder(context, snapshot, index, max, trailing, counts),
-      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 76),
+      itemCount: exercises.length,
+      itemBuilder: (context, index) => _buildExerciseItem(
+        context,
+        snapshot,
+        index,
+        maxSets,
+        trailing,
+        counts,
+      ),
+    );
   }
 
-  Widget itemBuilder(
+  Widget _buildExerciseItem(
     BuildContext context,
     AsyncSnapshot<List<PlanExercise>> snapshot,
     int index,
@@ -741,84 +1011,53 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
     List<GymCount> counts,
   ) {
     final exercise = snapshot.data![index];
-    final idx = counts.indexWhere((element) => element.name == exercise.exercise);
+
+    final countIndex = counts.indexWhere(
+      (element) => element.name == exercise.exercise,
+    );
+
     var count = 0;
-    int max = maxSets;
+    var max = maxSets;
 
-    if (idx > -1) {
-      count = counts[idx].count;
-      max = counts[idx].maxSets ?? maxSets;
+    if (countIndex != -1) {
+      final gymCount = counts[countIndex];
+
+      count = gymCount.count;
+      max = gymCount.maxSets ?? maxSets;
     }
 
-    Widget trail = const SizedBox();
-    switch (trailing) {
-      case PlanTrailing.reorder:
-        trail = ReorderableDragStartListener(
-          index: index,
-          child: const Icon(
-            Icons.drag_handle,
-            size: 32,
-          ),
-        );
-        break;
-
-      case PlanTrailing.ratio:
-        trail = Text(
-          "$count / $max",
-          style: const TextStyle(fontSize: 16),
-        );
-        break;
-
-      case PlanTrailing.count:
-        trail = Text(
-          count.toString(),
-          style: const TextStyle(fontSize: 16),
-        );
-        break;
-
-      case PlanTrailing.percent:
-        trail = Text(
-          "${(count / max * 100).toStringAsFixed(2)}%",
-          style: const TextStyle(fontSize: 16),
-        );
-        break;
-
-      case PlanTrailing.none:
-        trail = const SizedBox();
-        break;
-    }
+    final iconColor = index == expandedIndex
+        ? Theme.of(context).colorScheme.primary
+        : Colors.white;
 
     return GestureDetector(
       key: Key(exercise.exercise),
-      onLongPressStart: (details) async {
-        showModalBottomSheet(
-          useRootNavigator: true,
-          context: context,
-          builder: (context) {
-            return SafeArea(
-              child: ExerciseModal(
-                planId: widget.plan.id,
-                exercise: exercise.exercise,
-                hasData: count > 0,
-                onSelect: () => select(index),
-                onMax: () {
-                  planState.updateGymCounts(widget.plan.id);
-                },
-              ),
-            );
-          },
-        );
-      },
-      child: material.Column(
+      onLongPressStart: (_) => _showExerciseModal(
+        context,
+        exercise,
+        index,
+        count,
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            data: Theme.of(context).copyWith(
+              dividerColor: Colors.transparent,
+            ),
             child: ExpansionTile(
+              initiallyExpanded: index == 0,
               controller: controllers.putIfAbsent(
                 index,
-                () => ExpansibleController(),
+                ExpansibleController.new,
+              ),
+              textColor: Theme.of(context).colorScheme.primary,
+              trailing: _buildTrailing(
+                trailing,
+                count,
+                max,
+                index,
               ),
               onExpansionChanged: (open) {
                 if (open) {
@@ -827,33 +1066,19 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
                   }
 
                   expandedIndex = index;
-
-                  tap(index, counts, exercise.exercise);
+                  select(index);
                 } else if (expandedIndex == index) {
                   expandedIndex = null;
                 }
               },
-              trailing: trail,
-              title: Row(
-                children: [
-                  Radio(
-                    value: index == selected,
-                    groupValue: true,
-                    onChanged: (value) {
-                      select(index);
-                    },
-                  ),
-                  Flexible(
-                    child: Text(exercise.exercise),
-                  ),
-                ],
+              title: _buildExerciseTitle(
+                exercise.exercise,
+                iconColor,
               ),
               children: [
                 if (!cardio)
                   Row(
-                    children: [
-                      ...strengthFields(snapshot),
-                    ],
+                    children: strengthFields(snapshot),
                   ),
                 if (cardio) ...cardioFields(snapshot),
                 unitSelector(),
@@ -861,12 +1086,111 @@ class _StartPlanPageState extends State<StartPlanPage> with WidgetsBindingObserv
               ],
             ),
           ),
-          SizedBox(
-            height: 4,
+          const SizedBox(height: 4),
+          CustomSetIndicator(
+            count: count,
+            max: max,
           ),
-          CustomSetIndicator(count: count, max: max),
+          const SizedBox(height: 4),
         ],
       ),
+    );
+  }
+
+  Widget _buildExerciseTitle(
+    String exercise,
+    Color iconColor,
+  ) {
+    return Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: Theme.of(context).primaryColor,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(
+              exercise[0].toUpperCase(),
+              style: TextStyle(
+                color: iconColor,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(exercise),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrailing(
+    PlanTrailing trailing,
+    int count,
+    int max,
+    int index,
+  ) {
+    switch (trailing) {
+      case PlanTrailing.reorder:
+        return ReorderableDragStartListener(
+          index: index,
+          child: const Icon(
+            Icons.drag_handle,
+            size: 32,
+          ),
+        );
+
+      case PlanTrailing.ratio:
+        return Text(
+          '$count / $max',
+          style: const TextStyle(fontSize: 16),
+        );
+
+      case PlanTrailing.count:
+        return Text(
+          count.toString(),
+          style: const TextStyle(fontSize: 16),
+        );
+
+      case PlanTrailing.percent:
+        return Text(
+          '${(count / max * 100).toStringAsFixed(2)}%',
+          style: const TextStyle(fontSize: 16),
+        );
+
+      case PlanTrailing.none:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Future<void> _showExerciseModal(
+    BuildContext context,
+    PlanExercise exercise,
+    int index,
+    int count,
+  ) async {
+    await showModalBottomSheet(
+      useRootNavigator: true,
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: ExerciseModal(
+            planId: widget.plan.id,
+            exercise: exercise.exercise,
+            hasData: count > 0,
+            onSelect: () => select(index),
+            onMax: () {
+              planState.updateGymCounts(widget.plan.id);
+            },
+          ),
+        );
+      },
     );
   }
 }

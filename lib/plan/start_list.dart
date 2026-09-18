@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart';
 import 'package:flexify/constants.dart';
-import 'package:flexify/custom_set_indicator.dart';
 import 'package:flexify/database/database.dart';
 import 'package:flexify/main.dart';
 import 'package:flexify/plan/exercise_modal.dart';
@@ -215,7 +214,7 @@ class _StartListState extends State<StartList> {
               ],
             ),
           ),
-          CustomSetIndicator(count: count, max: max),
+          //CustomSetIndicator(count: count, max: max),
         ],
       ),
     );

@@ -5,6 +5,7 @@ class AnimatedFab extends StatefulWidget {
   final Widget label;
   final ScrollController? scroll;
   final Widget? icon;
+  //final Object heroTag;
 
   const AnimatedFab({
     super.key,
@@ -12,6 +13,7 @@ class AnimatedFab extends StatefulWidget {
     required this.label,
     this.scroll,
     required this.icon,
+    //required this.heroTag,
   });
 
   @override
@@ -54,7 +56,7 @@ class _AnimatedFabState extends State<AnimatedFab> {
         width: extended ? 100 : 56,
         height: 56,
         child: FloatingActionButton.extended(
-          heroTag: 'hero',
+          heroTag: null, //widget.heroTag,
           onPressed: () => widget.onPressed(),
           label: AnimatedOpacity(
             duration: const Duration(milliseconds: 200),
